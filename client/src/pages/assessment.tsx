@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AssessmentAnswer } from "@shared/schema";
 import WelcomeScreen from "@/components/assessment/WelcomeScreen";
 import AssessmentScreen from "@/components/assessment/AssessmentScreen";
@@ -8,14 +8,39 @@ import { ChartLine, Clock, HelpCircle, BarChart3 } from "lucide-react";
 export default function AssessmentPage() {
   const [currentScreen, setCurrentScreen] = useState<"welcome" | "assessment" | "results">("welcome");
   const [assessmentAnswers, setAssessmentAnswers] = useState<Record<string, AssessmentAnswer>>({});
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("assessmentSessionId");
+    if (stored) {
+      setSessionId(stored);
+    }
+  }, []);
 
   const handleStartAssessment = () => {
+    const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(id);
+    localStorage.setItem("assessmentSessionId", id);
     setCurrentScreen("assessment");
+  };
+
+  const handleContinueAssessment = () => {
+    if (sessionId) {
+      setCurrentScreen("assessment");
+    }
+  };
+
+  const handleExitAssessment = () => {
+    setCurrentScreen("welcome");
+    if (sessionId) {
+      localStorage.setItem("assessmentSessionId", sessionId);
+    }
   };
 
   const handleCompleteAssessment = (answers: Record<string, AssessmentAnswer>) => {
     setAssessmentAnswers(answers);
     setCurrentScreen("results");
+    localStorage.removeItem("assessmentSessionId");
   };
 
   return (
@@ -54,10 +79,18 @@ export default function AssessmentPage() {
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentScreen === "welcome" && (
-          <WelcomeScreen onStart={handleStartAssessment} />
+          <WelcomeScreen
+            onStart={handleStartAssessment}
+            canContinue={!!sessionId}
+            onContinue={handleContinueAssessment}
+          />
         )}
-        {currentScreen === "assessment" && (
-          <AssessmentScreen onComplete={handleCompleteAssessment} />
+        {currentScreen === "assessment" && sessionId && (
+          <AssessmentScreen
+            sessionId={sessionId}
+            onComplete={handleCompleteAssessment}
+            onExit={handleExitAssessment}
+          />
         )}
         {currentScreen === "results" && (
           <ResultsScreen answers={assessmentAnswers} />

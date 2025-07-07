@@ -36,12 +36,22 @@ export default function ResultsScreen({ answers }: ResultsScreenProps) {
       const response = await apiRequest("POST", "/api/results", data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setIsSubmitted(true);
-      toast({
-        title: "Results sent successfully!",
-        description: "Your assessment report has been sent to your email and our team.",
-      });
+      if (data.emailStatus === "success") {
+        toast({
+          title: "Results sent successfully!",
+          description:
+            "Your assessment report has been sent to your email and our team.",
+        });
+      } else {
+        toast({
+          title: "Email failed to send",
+          description:
+            "Your results were saved, but the email could not be delivered.",
+          variant: "destructive",
+        });
+      }
     },
     onError: () => {
       toast({

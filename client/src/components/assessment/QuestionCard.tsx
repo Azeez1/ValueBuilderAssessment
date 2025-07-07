@@ -1,7 +1,7 @@
 import { Question } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, LogOut } from "lucide-react";
 
 interface QuestionCardProps {
   question: Question;
@@ -13,6 +13,7 @@ interface QuestionCardProps {
   onSkipToEnd: () => void;
   canGoBack: boolean;
   isLastQuestion: boolean;
+  onExit: () => void;
 }
 
 export default function QuestionCard({
@@ -24,7 +25,8 @@ export default function QuestionCard({
   onSave,
   onSkipToEnd,
   canGoBack,
-  isLastQuestion
+  isLastQuestion,
+  onExit,
 }: QuestionCardProps) {
   const getSectionIcon = (section: string) => {
     // Return appropriate icon based on section
@@ -112,14 +114,22 @@ export default function QuestionCard({
               <ChevronLeft className="w-4 h-4 mr-2" />
               Previous
             </Button>
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={onSave} className="flex items-center">
-                <Save className="w-4 h-4 mr-2" />
-                Save Progress
-              </Button>
-              <Button variant="outline" onClick={onSkipToEnd} className="text-orange-600 border-orange-600 hover:bg-orange-50">
-                Skip to End (Test)
-              </Button>
+          <div className="flex space-x-3">
+            <Button variant="outline" onClick={onSave} className="flex items-center">
+              <Save className="w-4 h-4 mr-2" />
+              Save Progress
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onExit}
+              className="text-red-600 border-red-600 hover:bg-red-50"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Exit Assessment
+            </Button>
+            <Button variant="outline" onClick={onSkipToEnd} className="text-orange-600 border-orange-600 hover:bg-orange-50">
+              Skip to End (Test)
+            </Button>
               <Button onClick={onNext} className="flex items-center">
                 {isLastQuestion ? "Complete Assessment" : "Next Question"}
                 {!isLastQuestion && <ChevronRight className="w-4 h-4 ml-2" />}

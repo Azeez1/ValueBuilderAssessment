@@ -1,10 +1,6 @@
 import { assessments, results, type Assessment, type InsertAssessment, type UpdateAssessment, type Result, type InsertResult } from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: number): Promise<any>;
-  getUserByUsername(username: string): Promise<any>;
-  createUser(user: any): Promise<any>;
-  
   // Assessment methods
   createAssessment(assessment: InsertAssessment): Promise<Assessment>;
   updateAssessment(sessionId: string, updates: UpdateAssessment): Promise<Assessment | undefined>;
@@ -16,39 +12,18 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<number, any>;
   private assessments: Map<number, Assessment>;
   private results: Map<number, Result>;
   private assessmentsBySessionId: Map<string, Assessment>;
-  currentUserId: number;
   currentAssessmentId: number;
   currentResultId: number;
 
   constructor() {
-    this.users = new Map();
     this.assessments = new Map();
     this.results = new Map();
     this.assessmentsBySessionId = new Map();
-    this.currentUserId = 1;
     this.currentAssessmentId = 1;
     this.currentResultId = 1;
-  }
-
-  async getUser(id: number): Promise<any> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<any> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: any): Promise<any> {
-    const id = this.currentUserId++;
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
   }
 
   async createAssessment(insertAssessment: InsertAssessment): Promise<Assessment> {

@@ -87,11 +87,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertResultSchema.parse(req.body);
       const result = await storage.createResult(data);
+      const emailStatus = await sendResultEmail(data);
 
-      // Send email to user and admin
-      await sendResultEmail(data);
-
-      res.json(result);
+      res.json({ ...result, emailStatus });
     } catch (error) {
       console.error("Error creating result:", error);
       res.status(400).json({ error: "Invalid result data" });
@@ -116,8 +114,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-async function sendResultEmail(resultData: any) {
+async function sendResultEmail(resultData: any): Promise<'success' | 'failed'> {
   const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
+
+  console.log('Attempting to send email with config:', {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    user: process.env.SMTP_USER
+  });
+
+  try {
+    await transporter.verify();
+    console.log('SMTP connection verified successfully');
+  } catch (error) {
+    console.error('Failed to verify SMTP connection:', error);
+    // continue anyway
+  }
 
   // Generate category breakdown text
   const breakdownText = Object.entries(categoryBreakdown as Record<string, any>)
@@ -141,19 +153,34 @@ async function sendResultEmail(resultData: any) {
     <p>This assessment was completed on ${new Date().toLocaleDateString()}.</p>
   `;
 
-  // Send to user
-  await transporter.sendMail({
-    from: process.env.SMTP_USER || "noreply@valuebuilder.com",
-    to: userEmail,
-    subject: "Your Value Builder Assessment Results",
-    html: emailContent,
-  });
+  const attemptSend = async () => {
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_USER || "noreply@valuebuilder.com",
+        to: userEmail,
+        subject: "Your Value Builder Assessment Results",
+        html: emailContent,
+      });
 
-  // Send to admin
-  await transporter.sendMail({
-    from: process.env.SMTP_USER || "noreply@valuebuilder.com",
-    to: "aoseni@duxvitaecapital.com",
-    subject: `New Value Builder Assessment: ${userName}`,
-    html: emailContent,
-  });
+      await transporter.sendMail({
+        from: process.env.SMTP_USER || "noreply@valuebuilder.com",
+        to: "aoseni@duxvitaecapital.com",
+        subject: `New Value Builder Assessment: ${userName}`,
+        html: emailContent,
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Email sending failed:', err);
+      return false;
+    }
+  };
+
+  let success = await attemptSend();
+  if (!success) {
+    console.log('Retrying email send...');
+    success = await attemptSend();
+  }
+
+  return success ? 'success' : 'failed';
 }
