@@ -6,21 +6,28 @@ import { z } from "zod";
 import nodemailer from "nodemailer";
 
 // Email configuration - FIXED VERSION
+const smtpHost = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
 const smtpPort = parseInt(process.env.SMTP_PORT || "587");
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com", // Remove any spaces
+const smtpUser = (process.env.SMTP_USER || "aoseni@duxvitaecapital.com").trim();
+const smtpPass = (process.env.SMTP_PASS || "").trim();
+
+console.log('Email config debug:', {
+  host: smtpHost,
   port: smtpPort,
-  secure: smtpPort === 465, // MUST be true for port 465
+  user: smtpUser,
+  passExists: !!smtpPass,
+  secure: smtpPort === 465
+});
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // Use Gmail service directly for better compatibility
   auth: {
-    user: process.env.SMTP_USER?.trim() || "aoseni@duxvitaecapital.com",
-    pass: process.env.SMTP_PASS?.trim() || "",
+    user: smtpUser,
+    pass: smtpPass,
   },
-  logger: true, // Enable logging to see what's happening
-  debug: true, // Enable debug output
   tls: {
-    rejectUnauthorized: false,
-    minVersion: "TLSv1.2",
-  },
+    rejectUnauthorized: false
+  }
 });
 
 // Add immediate verification after creating transporter
@@ -134,11 +141,11 @@ async function sendResultEmail(resultData: any) {
   const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
 
   console.log('Attempting to send email with config:', {
-    host: process.env.SMTP_HOST?.trim(),
-    port: process.env.SMTP_PORT,
-    user: process.env.SMTP_USER?.trim(),
-    secure: parseInt(process.env.SMTP_PORT || "587") === 465,
-    passLength: process.env.SMTP_PASS?.trim().length
+    host: smtpHost,
+    port: smtpPort,
+    user: smtpUser,
+    secure: smtpPort === 465,
+    passExists: !!smtpPass
   });
 
   // Generate category breakdown text
@@ -163,10 +170,20 @@ async function sendResultEmail(resultData: any) {
     <p>This assessment was completed on ${new Date().toLocaleDateString()}.</p>
   `;
 
+  // Add SMTP verification first
   try {
-    // Send to user with timeout
+    await transporter.verify();
+    console.log('SMTP connection verified successfully');
+  } catch (error: any) {
+    console.error('SMTP verification failed:', error.message);
+    return 'failed';
+  }
+
+  try {
+    // Send to user
+    console.log('Sending email to user:', userEmail);
     const userMailInfo = await transporter.sendMail({
-      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
+      from: `"Value Builder Assessment" <${smtpUser}>`,
       to: userEmail,
       subject: "Your Value Builder Assessment Results",
       html: emailContent,
@@ -174,20 +191,22 @@ async function sendResultEmail(resultData: any) {
     console.log('Email sent to user successfully:', userMailInfo.messageId);
 
     // Send to admin
+    console.log('Sending email to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
-      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
-      to: "aoseni@duxvitaecapital.com",
+      from: `"Value Builder Assessment" <${smtpUser}>`,
+      to: smtpUser,
       subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
       html: emailContent,
     });
     console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
+    return 'success';
+
   } catch (error: any) {
     console.error('Email sending failed:', error.message);
     if (error.code) console.error('Error code:', error.code);
     if (error.command) console.error('Error command:', error.command);
+    if (error.response) console.error('SMTP Response:', error.response);
     return 'failed';
   }
-
-  return 'success';
 }
