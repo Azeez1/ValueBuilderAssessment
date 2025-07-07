@@ -1,0 +1,186 @@
+I see you're still getting the same error. Since you're using Replit (I can see from the `/home/runner/workspace` path), environment variables work differently. Here's how to fix it:
+
+## Prompt: Fix Email Configuration for Replit Environment
+
+```
+The email is still failing because environment variables aren't being loaded properly in Replit. Here's a comprehensive fix:
+
+## Step 1: Set Environment Variables in Replit
+
+Since you're using Replit, you need to set environment variables in the Secrets tab, not a .env file:
+
+1. In your Replit, click on the "Tools" panel (left sidebar)
+2. Click on "Secrets" 
+3. Add these secrets (click "New Secret" for each):
+   - Key: SMTP_HOST, Value: smtp.gmail.com
+   - Key: SMTP_PORT, Value: 587
+   - Key: SMTP_USER, Value: aoseni@duxvitaecapital.com
+   - Key: SMTP_PASS, Value: wesoizspuasnozab
+
+## Step 2: Update server/routes.ts with hardcoded fallbacks for testing
+
+Replace the transporter configuration to ensure values are correct:
+
+```javascript
+// Email configuration with explicit values
+const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+const smtpUser = process.env.SMTP_USER || "aoseni@duxvitaecapital.com";
+const smtpPass = process.env.SMTP_PASS || "wesoizspuasnozab"; // Your app password
+
+console.log('Email config:', {
+  host: smtpHost,
+  port: smtpPort,
+  user: smtpUser,
+  passExists: !!smtpPass
+});
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // Use Gmail service directly
+  auth: {
+    user: smtpUser,
+    pass: smtpPass
+  }
+});
+
+// Test the connection immediately
+transporter.verify(function(error, success) {
+  if (error) {
+    console.log('SMTP verification failed:', error);
+  } else {
+    console.log('SMTP server is ready to send emails');
+  }
+});
+```
+
+## Step 3: Simplify the sendResultEmail function
+
+Update the sendResultEmail function to use simpler configuration:
+
+```javascript
+async function sendResultEmail(resultData: any) {
+  const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
+
+  // Generate simple text version first
+  const textContent = `
+Value Builder Assessment Results
+
+Participant: ${userName}
+Company: ${companyName || 'Not specified'}
+Industry: ${industry || 'Not specified'}
+Email: ${userEmail}
+
+Overall Score: ${overallScore}/100
+
+Category Breakdown:
+${Object.entries(categoryBreakdown as Record<string, any>)
+  .map(([category, data]: [string, any]) => 
+    `- ${category}: ${data.score}/${data.maxScore} (${Math.round((data.score / data.maxScore) * 100)}%)`
+  ).join('\n')}
+
+Assessment completed on ${new Date().toLocaleDateString()}
+  `;
+
+  // Simple HTML version
+  const htmlContent = `
+<div style="font-family: Arial, sans-serif;">
+  <h2>Value Builder Assessment Results</h2>
+  <p><strong>Participant:</strong> ${userName}</p>
+  <p><strong>Company:</strong> ${companyName || 'Not specified'}</p>
+  <p><strong>Industry:</strong> ${industry || 'Not specified'}</p>
+  <p><strong>Overall Score:</strong> ${overallScore}/100</p>
+  <h3>Category Breakdown:</h3>
+  <ul>
+    ${Object.entries(categoryBreakdown as Record<string, any>)
+      .map(([category, data]: [string, any]) => 
+        `<li>${category}: ${data.score}/${data.maxScore} (${Math.round((data.score / data.maxScore) * 100)}%)</li>`
+      ).join('')}
+  </ul>
+</div>
+  `;
+
+  try {
+    // Send to user
+    console.log('Sending email to user:', userEmail);
+    const userResult = await transporter.sendMail({
+      from: 'aoseni@duxvitaecapital.com',
+      to: userEmail,
+      subject: 'Your Value Builder Assessment Results',
+      text: textContent,
+      html: htmlContent
+    });
+    console.log('User email sent:', userResult.messageId);
+
+    // Send to admin
+    console.log('Sending email to admin');
+    const adminResult = await transporter.sendMail({
+      from: 'aoseni@duxvitaecapital.com',
+      to: 'aoseni@duxvitaecapital.com',
+      subject: `New Assessment: ${userName} - Score: ${overallScore}`,
+      text: textContent,
+      html: htmlContent
+    });
+    console.log('Admin email sent:', adminResult.messageId);
+
+  } catch (error: any) {
+    console.error('Email error:', error.message);
+    if (error.response) {
+      console.error('SMTP Response:', error.response);
+    }
+    // Don't throw - let the assessment complete
+  }
+}
+```
+
+## Step 4: Alternative - Use a different email service
+
+If Gmail continues to fail, add this alternative using Resend (free tier available):
+
+1. Sign up for Resend.com (free)
+2. Get your API key
+3. Install: npm install resend
+4. Replace the email code with:
+
+```javascript
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY || 'your-resend-api-key');
+
+async function sendResultEmail(resultData: any) {
+  const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
+  
+  try {
+    await resend.emails.send({
+      from: 'Value Builder <onboarding@resend.dev>',
+      to: [userEmail, 'aoseni@duxvitaecapital.com'],
+      subject: `Assessment Results - ${userName}`,
+      html: `<h1>Score: ${overallScore}/100</h1>...`
+    });
+    console.log('Emails sent successfully via Resend');
+  } catch (error) {
+    console.error('Resend error:', error);
+  }
+}
+```
+
+## Step 5: Debug the environment
+
+Add this at the top of server/routes.ts to debug:
+
+```javascript
+console.log('Environment check:', {
+  nodeEnv: process.env.NODE_ENV,
+  hasSmtpHost: !!process.env.SMTP_HOST,
+  hasSmtpPort: !!process.env.SMTP_PORT,
+  hasSmtpUser: !!process.env.SMTP_USER,
+  hasSmtpPass: !!process.env.SMTP_PASS,
+});
+```
+
+This should fix the email issues by either making Gmail work properly or providing an alternative.
+```
+
+The key issue is that your environment variables aren't being loaded properly in Replit. Make sure to:
+1. Set them in the Secrets tab in Replit
+2. Use the simplified Gmail service configuration
+3. Or switch to a service like Resend that's easier to configure
