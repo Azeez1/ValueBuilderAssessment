@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema } from "@shared/schema";
+import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, AssessmentAnswer } from "@shared/schema";
+import { generatePDFReport } from "./pdfGenerator";
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -16,7 +17,7 @@ console.log('Email config debug:', {
   port: smtpPort,
   user: smtpUser,
   passExists: !!smtpPass,
-  secure: smtpPort === 465
+  secure: smtpPort === 587
 });
 
 const transporter = nodemailer.createTransport({
@@ -108,9 +109,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Results routes
   app.post("/api/results", async (req, res) => {
     try {
-      const data = insertResultSchema.parse(req.body);
+      const { sessionId, ...body } = req.body;
+      const data = insertResultSchema.parse(body);
       const result = await storage.createResult(data);
-      const emailStatus = await sendResultEmail(data);
+      const emailStatus = await sendResultEmail({ ...data, sessionId });
 
       res.json({ ...result, emailStatus });
     } catch (error) {
@@ -138,7 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 async function sendResultEmail(resultData: any) {
-  const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
+  const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown, sessionId } = resultData;
 
   console.log('Attempting to send email with config:', {
     host: smtpHost,
@@ -148,30 +150,52 @@ async function sendResultEmail(resultData: any) {
     passExists: !!smtpPass
   });
 
-  // Generate category breakdown text
-  const breakdownText = Object.entries(categoryBreakdown as Record<string, any>)
-    .map(([category, data]: [string, any]) => {
-      return `${category}: ${data.score}/${data.maxScore} (${Math.round((data.score / data.maxScore) * 100)}%)`;
-    })
-    .join('\n');
+  // Get full assessment with answers
+  const assessment = await storage.getAssessmentBySessionId(sessionId);
+  const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
+
+  // Generate PDF report
+  console.log('Generating PDF report...');
+  const pdfBuffer = await generatePDFReport(
+    userName,
+    userEmail,
+    companyName,
+    industry,
+    overallScore,
+    categoryBreakdown,
+    answers
+  );
+  console.log('PDF generated successfully');
 
   const emailContent = `
-    <h2>Value Builder Assessment Results</h2>
-    <p><strong>Participant:</strong> ${userName}</p>
-    <p><strong>Company:</strong> ${companyName || 'Not specified'}</p>
-    <p><strong>Industry:</strong> ${industry || 'Not specified'}</p>
-    <p><strong>Email:</strong> ${userEmail}</p>
-
-    <h3>Overall Score: ${overallScore}/100</h3>
-
-    <h3>Category Breakdown:</h3>
-    <pre>${breakdownText}</pre>
-
-    <p>This assessment was completed on ${new Date().toLocaleDateString()}.</p>
-  `;
+      <h2>Value Builder Assessment Completed</h2>
+      <p>Dear ${userName},</p>
+      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached to this email.</p>
+      <p><strong>Your Overall Score: ${overallScore}/100</strong></p>
+      <p>The attached PDF contains:</p>
+      <ul>
+        <li>Detailed breakdown of all 14 assessment categories</li>
+        <li>Priority areas for improvement</li>
+        <li>Strategic recommendations</li>
+        <li>Performance analysis</li>
+      </ul>
+      <p>Best regards,<br>Value Builder Assessment Team</p>
+    `;
 
   // Add SMTP verification first
   try {
+<<<<<<codex/add-pdf-report-generation-to-assessment-results
+    const mailOptions = {
+      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
+      attachments: [{
+        filename: `ValueBuilder_Report_${userName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+        content: pdfBuffer
+      }]
+    };
+
+    const userMailInfo = await transporter.sendMail({
+      ...mailOptions,
+=======
     await transporter.verify();
     console.log('SMTP connection verified successfully');
   } catch (error: any) {
@@ -184,12 +208,20 @@ async function sendResultEmail(resultData: any) {
     console.log('Sending email to user:', userEmail);
     const userMailInfo = await transporter.sendMail({
       from: `"Value Builder Assessment" <${smtpUser}>`,
+>>>>>> main
       to: userEmail,
-      subject: "Your Value Builder Assessment Results",
-      html: emailContent,
+      subject: 'Your Value Builder Assessment Report',
+      html: emailContent
     });
-    console.log('Email sent to user successfully:', userMailInfo.messageId);
+    console.log('Report sent to user', userMailInfo.messageId);
 
+<<<<<< codex/add-pdf-report-generation-to-assessment-results
+    const adminMailInfo = await transporter.sendMail({
+      ...mailOptions,
+      to: 'aoseni@duxvitaecapital.com',
+      subject: `New Assessment: ${userName} (${companyName}) - Score: ${overallScore}`,
+      html: emailContent + `<p>User Email: ${userEmail}</p>`
+=======
     // Send to admin
     console.log('Sending email to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
@@ -197,8 +229,9 @@ async function sendResultEmail(resultData: any) {
       to: smtpUser,
       subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
       html: emailContent,
+>>>>> main
     });
-    console.log('Email sent to admin successfully:', adminMailInfo.messageId);
+    console.log('Report sent to admin', adminMailInfo.messageId);
 
     return 'success';
 

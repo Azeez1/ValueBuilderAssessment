@@ -34,7 +34,7 @@ export function calculateCategoryScores(answers: Record<string, AssessmentAnswer
     categoryScores[section] = {
       name: section,
       score: Math.round(normalizedScore),
-      weight: sectionWeights[section] || 0,
+      weight: (sectionWeights as Record<string, number>)[section] || 0,
       maxScore: 100,
     };
   });

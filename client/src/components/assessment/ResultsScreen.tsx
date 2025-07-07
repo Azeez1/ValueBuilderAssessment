@@ -13,9 +13,10 @@ import { CheckCircle, Send, ChartLine, Users, Cog, UserCheck, Shield, Gem, Trend
 
 interface ResultsScreenProps {
   answers: Record<string, AssessmentAnswer>;
+  sessionId: string;
 }
 
-export default function ResultsScreen({ answers }: ResultsScreenProps) {
+export default function ResultsScreen({ answers, sessionId }: ResultsScreenProps) {
   const [userInfo, setUserInfo] = useState({
     name: "",
     email: "",
@@ -76,6 +77,7 @@ export default function ResultsScreen({ answers }: ResultsScreenProps) {
 
     const resultData = {
       assessmentId: 1, // This would be the actual assessment ID
+      sessionId: sessionId,
       userName: userInfo.name,
       userEmail: userInfo.email,
       companyName: userInfo.company,
