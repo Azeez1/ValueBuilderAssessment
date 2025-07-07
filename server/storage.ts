@@ -41,11 +41,16 @@ export class MemStorage implements IStorage {
     };
     this.assessments.set(id, assessment);
     this.assessmentsBySessionId.set(assessment.sessionId, assessment);
+
+    console.log(`Created assessment with sessionId: ${assessment.sessionId}`);
+    console.log(`Total assessments in memory: ${this.assessments.size}`);
+
     return assessment;
   }
 
   async updateAssessment(sessionId: string, updates: UpdateAssessment): Promise<Assessment | undefined> {
     const assessment = this.assessmentsBySessionId.get(sessionId);
+    console.log(`Updating sessionId: ${sessionId}, Found: ${assessment ? 'Yes' : 'No'}`);
     if (!assessment) return undefined;
     
     const updatedAssessment: Assessment = {
@@ -56,11 +61,17 @@ export class MemStorage implements IStorage {
     
     this.assessments.set(assessment.id, updatedAssessment);
     this.assessmentsBySessionId.set(sessionId, updatedAssessment);
+
+    console.log(`Updated assessment with sessionId: ${sessionId}`);
     return updatedAssessment;
   }
 
   async getAssessmentBySessionId(sessionId: string): Promise<Assessment | undefined> {
-    return this.assessmentsBySessionId.get(sessionId);
+    const assessment = this.assessmentsBySessionId.get(sessionId);
+    console.log(`Looking for sessionId: ${sessionId}`);
+    console.log(`Found: ${assessment ? 'Yes' : 'No'}`);
+    console.log(`Total sessions in memory: ${this.assessmentsBySessionId.size}`);
+    return assessment;
   }
 
   async createResult(insertResult: InsertResult): Promise<Result> {
