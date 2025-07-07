@@ -93,7 +93,7 @@ export default function AssessmentPage() {
           />
         )}
         {currentScreen === "results" && (
-          <ResultsScreen answers={assessmentAnswers} />
+          <ResultsScreen answers={assessmentAnswers} sessionId={sessionId!} />
         )}
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { questions } from "@/data/questions";
-import { AssessmentAnswer } from "@shared/schema";
+import { AssessmentAnswer, Assessment } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import ProgressBar from "./ProgressBar";
@@ -30,7 +30,7 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId }: Asse
   const { toast } = useToast();
 
   // Load existing assessment if available
-  const { data: existingAssessment } = useQuery({
+  const { data: existingAssessment } = useQuery<Assessment | undefined>({
     queryKey: [`/api/assessments/${sessionId}`],
     enabled: !!sessionId && sessionId.length > 0,
   });
@@ -66,7 +66,7 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId }: Asse
 
   useEffect(() => {
     if (existingAssessment) {
-      setAnswers(existingAssessment.answers || {});
+      setAnswers((existingAssessment.answers || {}) as Record<string, AssessmentAnswer>);
       setCurrentQuestion(existingAssessment.currentQuestion || 0);
     }
   }, [existingAssessment]);
