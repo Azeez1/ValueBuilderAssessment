@@ -5,15 +5,31 @@ import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema } fr
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
-// Email configuration
+// Email configuration - FIXED VERSION
+const smtpPort = parseInt(process.env.SMTP_PORT || "587");
 const transporter = nodemailer.createTransport({
-  host: (process.env.SMTP_HOST || "smtp.gmail.com").trim(),
-  port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: false,
+  host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com", // Remove any spaces
+  port: smtpPort,
+  secure: smtpPort === 465, // MUST be true for port 465
   auth: {
-    user: (process.env.SMTP_USER || "your-email@gmail.com").trim(),
-    pass: (process.env.SMTP_PASS || "your-app-password").trim(),
+    user: process.env.SMTP_USER?.trim() || "aoseni@duxvitaecapital.com",
+    pass: process.env.SMTP_PASS?.trim() || "",
   },
+  logger: true, // Enable logging to see what's happening
+  debug: true, // Enable debug output
+  tls: {
+    rejectUnauthorized: false,
+    minVersion: "TLSv1.2",
+  },
+});
+
+// Add immediate verification after creating transporter
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log("SMTP setup error:", error);
+  } else {
+    console.log("SMTP server is ready to take our messages");
+  }
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -114,22 +130,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-async function sendResultEmail(resultData: any): Promise<'success' | 'failed'> {
+async function sendResultEmail(resultData: any) {
   const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown } = resultData;
 
   console.log('Attempting to send email with config:', {
-    host: process.env.SMTP_HOST,
+    host: process.env.SMTP_HOST?.trim(),
     port: process.env.SMTP_PORT,
-    user: process.env.SMTP_USER
+    user: process.env.SMTP_USER?.trim(),
+    secure: parseInt(process.env.SMTP_PORT || "587") === 465,
+    passLength: process.env.SMTP_PASS?.trim().length
   });
-
-  try {
-    await transporter.verify();
-    console.log('SMTP connection verified successfully');
-  } catch (error) {
-    console.error('Failed to verify SMTP connection:', error);
-    // continue anyway
-  }
 
   // Generate category breakdown text
   const breakdownText = Object.entries(categoryBreakdown as Record<string, any>)
@@ -153,34 +163,31 @@ async function sendResultEmail(resultData: any): Promise<'success' | 'failed'> {
     <p>This assessment was completed on ${new Date().toLocaleDateString()}.</p>
   `;
 
-  const attemptSend = async () => {
-    try {
-      await transporter.sendMail({
-        from: process.env.SMTP_USER || "noreply@valuebuilder.com",
-        to: userEmail,
-        subject: "Your Value Builder Assessment Results",
-        html: emailContent,
-      });
+  try {
+    // Send to user with timeout
+    const userMailInfo = await transporter.sendMail({
+      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
+      to: userEmail,
+      subject: "Your Value Builder Assessment Results",
+      html: emailContent,
+    });
+    console.log('Email sent to user successfully:', userMailInfo.messageId);
 
-      await transporter.sendMail({
-        from: process.env.SMTP_USER || "noreply@valuebuilder.com",
-        to: "aoseni@duxvitaecapital.com",
-        subject: `New Value Builder Assessment: ${userName}`,
-        html: emailContent,
-      });
+    // Send to admin
+    const adminMailInfo = await transporter.sendMail({
+      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
+      to: "aoseni@duxvitaecapital.com",
+      subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
+      html: emailContent,
+    });
+    console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
-      return true;
-    } catch (err) {
-      console.error('Email sending failed:', err);
-      return false;
-    }
-  };
-
-  let success = await attemptSend();
-  if (!success) {
-    console.log('Retrying email send...');
-    success = await attemptSend();
+  } catch (error: any) {
+    console.error('Email sending failed:', error.message);
+    if (error.code) console.error('Error code:', error.code);
+    if (error.command) console.error('Error command:', error.command);
+    return 'failed';
   }
 
-  return success ? 'success' : 'failed';
+  return 'success';
 }
