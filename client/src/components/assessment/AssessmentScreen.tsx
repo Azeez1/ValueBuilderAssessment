@@ -6,15 +6,27 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import ProgressBar from "./ProgressBar";
 import QuestionCard from "./QuestionCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AssessmentScreenProps {
   onComplete: (answers: Record<string, AssessmentAnswer>) => void;
+  onExit: () => void;
+  sessionId: string;
 }
 
-export default function AssessmentScreen({ onComplete }: AssessmentScreenProps) {
+export default function AssessmentScreen({ onComplete, onExit, sessionId }: AssessmentScreenProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AssessmentAnswer>>({});
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [showExitDialog, setShowExitDialog] = useState(false);
   const { toast } = useToast();
 
   // Load existing assessment if available
@@ -130,6 +142,16 @@ export default function AssessmentScreen({ onComplete }: AssessmentScreenProps) 
     completeAssessment(remainingAnswers);
   };
 
+  const handleExit = () => {
+    setShowExitDialog(true);
+  };
+
+  const confirmExit = () => {
+    saveProgress();
+    setShowExitDialog(false);
+    onExit();
+  };
+
   const completeAssessment = (finalAnswers = answers) => {
     const assessmentData = {
       sessionId,
@@ -157,9 +179,27 @@ export default function AssessmentScreen({ onComplete }: AssessmentScreenProps) 
         onPrevious={handlePrevious}
         onSave={saveProgress}
         onSkipToEnd={handleSkipToEnd}
+        onExit={handleExit}
         canGoBack={currentQuestion > 0}
         isLastQuestion={currentQuestion === questions.length - 1}
       />
+
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Exit Assessment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your progress will be saved. You can continue where you left off by starting the assessment again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Assessment</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmExit}>
+              Save & Exit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

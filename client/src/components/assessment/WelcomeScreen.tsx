@@ -4,9 +4,11 @@ import { ChartLine, Clock, HelpCircle, BarChart3, Users, Cog, UserCheck, Shield,
 
 interface WelcomeScreenProps {
   onStart: () => void;
+  canContinue?: boolean;
+  onContinue?: () => void;
 }
 
-export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onStart, canContinue, onContinue }: WelcomeScreenProps) {
   return (
     <div className="space-y-8">
       {/* Hero Section */}
@@ -31,9 +33,16 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
                 <div className="text-sm text-gray-600">Minutes</div>
               </div>
             </div>
-            <Button onClick={onStart} className="bg-primary hover:bg-blue-700 text-white font-medium px-8 py-3">
-              Begin Assessment
-            </Button>
+            <div className="space-x-4">
+              {canContinue && (
+                <Button onClick={onContinue} variant="outline">
+                  Continue Assessment
+                </Button>
+              )}
+              <Button onClick={onStart} className="bg-primary hover:bg-blue-700 text-white font-medium px-8 py-3">
+                Begin Assessment
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
