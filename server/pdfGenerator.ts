@@ -31,8 +31,7 @@ function drawScoreGauge(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
-  score: number,
-  industryAvg?: number
+  score: number
 ) {
   const centerX = x + 150;
   const centerY = y + 100;
@@ -78,14 +77,6 @@ function drawScoreGauge(
     .fillColor(getScoreColor(score))
     .text(score.toString(), centerX - 30, centerY + 20, { width: 60, align: 'center' });
 
-  if (industryAvg !== undefined) {
-    doc
-      .fontSize(10)
-      .fillColor('#6b7280')
-      .text('INDUSTRY', centerX - 50, y - 20, { width: 100, align: 'center' });
-    doc
-      .text(`AVERAGE: ${industryAvg}`, centerX - 50, y - 10, { width: 100, align: 'center' });
-  }
 
   doc
     .fontSize(8)
@@ -191,8 +182,7 @@ function generateCategoryDetailPage(
   doc: PDFKit.PDFDocument,
   category: string,
   score: CategoryScore,
-  isCore: boolean,
-  industryAvg?: number
+  isCore: boolean
 ) {
   doc.addPage();
   const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
@@ -200,7 +190,7 @@ function generateCategoryDetailPage(
 
   if (!details) return;
 
-  drawScoreGauge(doc, 350, 50, score.score, industryAvg);
+  drawScoreGauge(doc, 350, 50, score.score);
 
   doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, { width: 280 });
 
@@ -330,7 +320,7 @@ export async function generatePDFReport(
         align: 'center'
       });
 
-      drawScoreGauge(doc, doc.page.width / 2 - 150, 100, overallScore, 53);
+      drawScoreGauge(doc, doc.page.width / 2 - 150, 100, overallScore);
 
       doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 50, 300, {
         align: 'center'
@@ -383,20 +373,9 @@ export async function generatePDFReport(
 
       addFooter();
 
-      const industryAverages: Record<string, number> = {
-        'Financial Performance': 38,
-        'Growth Potential': 61,
-        'Switzerland Structure': 65,
-        'Valuation Teeter-Totter': 59,
-        'Recurring Revenue': 35,
-        'Monopoly Control': 55,
-        'Customer Satisfaction': 81,
-        'Hub & Spoke': 52
-      };
-
       for (const category of coreDrivers) {
         if (categoryScores[category]) {
-          generateCategoryDetailPage(doc, category, categoryScores[category], true, industryAverages[category]);
+          generateCategoryDetailPage(doc, category, categoryScores[category], true);
           addFooter();
         }
       }
