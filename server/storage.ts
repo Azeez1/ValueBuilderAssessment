@@ -1,97 +1,112 @@
-import { assessments, results, type Assessment, type InsertAssessment, type UpdateAssessment, type Result, type InsertResult } from "@shared/schema";
+import { db, initializeDatabase } from './db';
+import { assessments, results, type Assessment, type InsertAssessment, type UpdateAssessment, type Result, type InsertResult } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 export interface IStorage {
-  // Assessment methods
   createAssessment(assessment: InsertAssessment): Promise<Assessment>;
   updateAssessment(sessionId: string, updates: UpdateAssessment): Promise<Assessment | undefined>;
   getAssessmentBySessionId(sessionId: string): Promise<Assessment | undefined>;
-  
-  // Results methods
   createResult(result: InsertResult): Promise<Result>;
   getResultsByEmail(email: string): Promise<Result[]>;
 }
 
-export class MemStorage implements IStorage {
-  private assessments: Map<number, Assessment>;
-  private results: Map<number, Result>;
-  private assessmentsBySessionId: Map<string, Assessment>;
-  currentAssessmentId: number;
-  currentResultId: number;
-
+export class SQLiteStorage implements IStorage {
   constructor() {
-    this.assessments = new Map();
-    this.results = new Map();
-    this.assessmentsBySessionId = new Map();
-    this.currentAssessmentId = 1;
-    this.currentResultId = 1;
+    initializeDatabase();
   }
 
   async createAssessment(insertAssessment: InsertAssessment): Promise<Assessment> {
-    const id = this.currentAssessmentId++;
-    const now = new Date();
-    const assessment: Assessment = {
-      ...insertAssessment,
-      id,
-      createdAt: now,
-      updatedAt: now,
-      currentQuestion: insertAssessment.currentQuestion || 0,
-      completed: insertAssessment.completed || 0,
-      totalScore: insertAssessment.totalScore || null,
-      categoryScores: insertAssessment.categoryScores || null,
-    };
-    this.assessments.set(id, assessment);
-    this.assessmentsBySessionId.set(assessment.sessionId, assessment);
+    console.log(`Creating assessment with sessionId: ${insertAssessment.sessionId}`);
+    try {
+      const result = db.insert(assessments).values({
+        ...insertAssessment,
+        answers: insertAssessment.answers as any,
+        categoryScores: insertAssessment.categoryScores as any,
+      }).returning().get();
 
-    console.log(`Created assessment with sessionId: ${assessment.sessionId}`);
-    console.log(`Total assessments in memory: ${this.assessments.size}`);
-
-    return assessment;
+      console.log(`Assessment created successfully with ID: ${result.id}`);
+      return result;
+    } catch (error) {
+      console.error('Error creating assessment:', error);
+      throw error;
+    }
   }
 
   async updateAssessment(sessionId: string, updates: UpdateAssessment): Promise<Assessment | undefined> {
-    const assessment = this.assessmentsBySessionId.get(sessionId);
-    console.log(`Updating sessionId: ${sessionId}, Found: ${assessment ? 'Yes' : 'No'}`);
-    if (!assessment) return undefined;
-    
-    const updatedAssessment: Assessment = {
-      ...assessment,
-      ...updates,
-      updatedAt: new Date(),
-    };
-    
-    this.assessments.set(assessment.id, updatedAssessment);
-    this.assessmentsBySessionId.set(sessionId, updatedAssessment);
+    console.log(`Updating assessment with sessionId: ${sessionId}`);
+    try {
+      const existing = await this.getAssessmentBySessionId(sessionId);
+      if (!existing) {
+        console.log(`No assessment found with sessionId: ${sessionId}`);
+        return undefined;
+      }
 
-    console.log(`Updated assessment with sessionId: ${sessionId}`);
-    return updatedAssessment;
+      const result = db.update(assessments)
+        .set({
+          ...updates,
+          answers: updates.answers as any,
+          categoryScores: updates.categoryScores as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(assessments.sessionId, sessionId))
+        .returning()
+        .get();
+
+      console.log('Assessment updated successfully');
+      return result;
+    } catch (error) {
+      console.error('Error updating assessment:', error);
+      throw error;
+    }
   }
 
   async getAssessmentBySessionId(sessionId: string): Promise<Assessment | undefined> {
-    const assessment = this.assessmentsBySessionId.get(sessionId);
-    console.log(`Looking for sessionId: ${sessionId}`);
-    console.log(`Found: ${assessment ? 'Yes' : 'No'}`);
-    console.log(`Total sessions in memory: ${this.assessmentsBySessionId.size}`);
-    return assessment;
+    console.log(`Looking for assessment with sessionId: ${sessionId}`);
+    try {
+      const result = db.select().from(assessments).where(eq(assessments.sessionId, sessionId)).get();
+      if (result) {
+        console.log(`Assessment found with ID: ${result.id}`);
+        if (typeof result.answers === 'string') result.answers = JSON.parse(result.answers);
+        if (typeof result.categoryScores === 'string' && result.categoryScores) result.categoryScores = JSON.parse(result.categoryScores);
+      } else {
+        console.log(`No assessment found with sessionId: ${sessionId}`);
+      }
+      return result;
+    } catch (error) {
+      console.error('Error retrieving assessment:', error);
+      throw error;
+    }
   }
 
   async createResult(insertResult: InsertResult): Promise<Result> {
-    const id = this.currentResultId++;
-    const result: Result = {
-      ...insertResult,
-      id,
-      createdAt: new Date(),
-      companyName: insertResult.companyName || null,
-      industry: insertResult.industry || null,
-    };
-    this.results.set(id, result);
-    return result;
+    console.log(`Creating result for user: ${insertResult.userName}`);
+    try {
+      const result = db.insert(results).values({
+        ...insertResult,
+        categoryBreakdown: insertResult.categoryBreakdown as any,
+      }).returning().get();
+      console.log(`Result created successfully with ID: ${result.id}`);
+      return result;
+    } catch (error) {
+      console.error('Error creating result:', error);
+      throw error;
+    }
   }
 
   async getResultsByEmail(email: string): Promise<Result[]> {
-    return Array.from(this.results.values()).filter(
-      (result) => result.userEmail === email,
-    );
+    console.log(`Retrieving results for email: ${email}`);
+    try {
+      const resultsList = db.select().from(results).where(eq(results.userEmail, email)).all();
+      resultsList.forEach(r => {
+        if (typeof r.categoryBreakdown === 'string') r.categoryBreakdown = JSON.parse(r.categoryBreakdown);
+      });
+      console.log(`Found ${resultsList.length} results for email: ${email}`);
+      return resultsList;
+    } catch (error) {
+      console.error('Error retrieving results:', error);
+      throw error;
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new SQLiteStorage();
