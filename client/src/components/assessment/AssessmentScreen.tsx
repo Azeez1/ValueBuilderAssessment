@@ -21,9 +21,10 @@ interface AssessmentScreenProps {
   onComplete: (answers: Record<string, AssessmentAnswer>) => void;
   onExit: () => void;
   sessionId: string;
+  speedTest?: boolean;
 }
 
-export default function AssessmentScreen({ onComplete, onExit, sessionId }: AssessmentScreenProps) {
+export default function AssessmentScreen({ onComplete, onExit, sessionId, speedTest }: AssessmentScreenProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AssessmentAnswer>>({});
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -70,6 +71,13 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId }: Asse
       setCurrentQuestion(existingAssessment.currentQuestion || 0);
     }
   }, [existingAssessment]);
+
+  // Trigger speed test if speedTest prop is true
+  useEffect(() => {
+    if (speedTest) {
+      fillRandomAnswers();
+    }
+  }, [speedTest]);
 
   const handleAnswerSelect = (value: string, points: number) => {
     const newAnswers = {
@@ -140,6 +148,30 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId }: Asse
     }
     setAnswers(remainingAnswers);
     completeAssessment(remainingAnswers);
+  };
+
+  const fillRandomAnswers = () => {
+    const randomAnswers: Record<string, AssessmentAnswer> = {};
+    questions.forEach((question) => {
+      // Pick a random option for each question
+      const randomIndex = Math.floor(Math.random() * question.options.length);
+      const randomOption = question.options[randomIndex];
+      randomAnswers[question.id] = {
+        questionId: question.id,
+        value: randomOption.text,
+        points: randomOption.points,
+      };
+    });
+    setAnswers(randomAnswers);
+    
+    // Show notification about random fill
+    toast({
+      title: "Speed Test Activated",
+      description: "All questions have been randomly filled. You can now complete the assessment.",
+    });
+    
+    // Jump to the last question
+    setCurrentQuestion(questions.length - 1);
   };
 
   const handleExit = () => {

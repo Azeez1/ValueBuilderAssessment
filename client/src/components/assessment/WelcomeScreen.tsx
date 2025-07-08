@@ -6,9 +6,10 @@ interface WelcomeScreenProps {
   onStart: () => void;
   canContinue?: boolean;
   onContinue?: () => void;
+  onSpeedTest?: () => void;
 }
 
-export default function WelcomeScreen({ onStart, canContinue, onContinue }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onStart, canContinue, onContinue, onSpeedTest }: WelcomeScreenProps) {
   return (
     <div className="space-y-8">
       {/* Hero Section */}
@@ -42,6 +43,11 @@ export default function WelcomeScreen({ onStart, canContinue, onContinue }: Welc
               <Button onClick={onStart} className="bg-primary hover:bg-blue-700 text-white font-medium px-8 py-3">
                 Begin Assessment
               </Button>
+              {onSpeedTest && (
+                <Button onClick={onSpeedTest} variant="outline" className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 py-3">
+                  Speed Test (Random Fill)
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

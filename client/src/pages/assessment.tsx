@@ -9,6 +9,7 @@ export default function AssessmentPage() {
   const [currentScreen, setCurrentScreen] = useState<"welcome" | "assessment" | "results">("welcome");
   const [assessmentAnswers, setAssessmentAnswers] = useState<Record<string, AssessmentAnswer>>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [speedTest, setSpeedTest] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("assessmentSessionId");
@@ -30,8 +31,17 @@ export default function AssessmentPage() {
     }
   };
 
+  const handleSpeedTest = () => {
+    const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(id);
+    localStorage.setItem("assessmentSessionId", id);
+    setSpeedTest(true);
+    setCurrentScreen("assessment");
+  };
+
   const handleExitAssessment = () => {
     setCurrentScreen("welcome");
+    setSpeedTest(false);
     if (sessionId) {
       localStorage.setItem("assessmentSessionId", sessionId);
     }
@@ -40,6 +50,7 @@ export default function AssessmentPage() {
   const handleCompleteAssessment = (answers: Record<string, AssessmentAnswer>) => {
     setAssessmentAnswers(answers);
     setCurrentScreen("results");
+    setSpeedTest(false);
     localStorage.removeItem("assessmentSessionId");
   };
 
@@ -83,6 +94,7 @@ export default function AssessmentPage() {
             onStart={handleStartAssessment}
             canContinue={!!sessionId}
             onContinue={handleContinueAssessment}
+            onSpeedTest={handleSpeedTest}
           />
         )}
         {currentScreen === "assessment" && sessionId && (
@@ -90,6 +102,7 @@ export default function AssessmentPage() {
             sessionId={sessionId}
             onComplete={handleCompleteAssessment}
             onExit={handleExitAssessment}
+            speedTest={speedTest}
           />
         )}
         {currentScreen === "results" && (
