@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
-// import { generatePDFReport } from "./pdfGenerator"; // Temporarily disabled
+import { generatePDFReport } from "./pdfGenerator";
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -154,18 +154,17 @@ async function sendResultEmail(resultData: any) {
   const assessment = await storage.getAssessmentBySessionId(sessionId);
   const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
 
-  // Generate PDF report (temporarily disabled)
-  // console.log('Generating PDF report...');
-  // const pdfBuffer = await generatePDFReport(
-  //   userName,
-  //   userEmail,
-  //   companyName,
-  //   industry,
-  //   overallScore,
-  //   categoryBreakdown,
-  //   answers
-  // );
-  // console.log('PDF generated successfully');
+  console.log('Generating PDF report...');
+  const pdfBuffer = await generatePDFReport(
+  userName,
+  userEmail,
+  companyName,
+  industry,
+  overallScore,
+  categoryBreakdown,
+  answers
+  );
+  console.log('PDF generated successfully');
 
   const emailContent = `
       <h2>Value Builder Assessment Completed</h2>
@@ -198,6 +197,7 @@ async function sendResultEmail(resultData: any) {
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: userEmail,
       subject: "Your Value Builder Assessment Results",
+      attachments: [{ filename: "ValueBuilderReport.pdf", content: pdfBuffer }],
       html: emailContent,
     });
     console.log('Email sent to user successfully:', userMailInfo.messageId);
@@ -208,6 +208,7 @@ async function sendResultEmail(resultData: any) {
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: smtpUser,
       subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
+      attachments: [{ filename: "ValueBuilderReport.pdf", content: pdfBuffer }],
       html: emailContent,
     });
     console.log('Email sent to admin successfully:', adminMailInfo.messageId);
