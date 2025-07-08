@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer from "puppeteer";
 import { AssessmentAnswer, CategoryScore } from "@shared/schema";
 
 interface DriverInfo { name: string; weight: number; }
@@ -23,35 +23,50 @@ const SUPPLEMENTAL_DRIVERS: DriverInfo[] = [
   { name: "Strategic Assets & Intangibles", weight: 5 },
 ];
 
-function performanceDescription(score: number): string {
-  if (score >= 80) return "Excellent - Industry-leading performance";
-  if (score >= 60) return "Good - Performing well with optimization opportunities";
-  if (score >= 40) return "Below Average - Significant improvement needed";
-  return "Critical - Requires immediate attention";
+function performanceLevel(score: number): string {
+  if (score >= 80) return "Excellent";
+  if (score >= 60) return "Good";
+  if (score >= 40) return "Needs Improvement";
+  return "Critical";
+}
+
+function insightForScore(score: number): string {
+  if (score >= 80) return "Excellent performance to be maintained and leveraged.";
+  if (score >= 60) return "Good performance with optimization opportunities.";
+  if (score >= 40) return "Below average performance with specific improvement needs.";
+  return "Critical issues requiring immediate attention.";
+}
+
+function scoreColor(score: number): string {
+  if (score >= 60) return "#16a34a"; // green
+  if (score >= 40) return "#facc15"; // yellow
+  return "#dc2626"; // red
+}
+
+function progressBar(score: number): string {
+  const color = scoreColor(score);
+  return `<div style="background:#e5e7eb;height:16px;border-radius:8px;overflow:hidden;">
+            <div style="background:${color};width:${score}%;height:100%;"></div>
+          </div>`;
 }
 
 function generateDriverPages(drivers: DriverInfo[], categoryScores: Record<string, CategoryScore>): string {
   return drivers.map(d => {
     const score = categoryScores[d.name]?.score ?? 0;
-    const desc = performanceDescription(score);
+    const level = performanceLevel(score);
+    const insight = insightForScore(score);
+    const recommendation = getImprovementRecommendation(d.name, score);
     return `
-      <section class="driver-cover">
+      <section>
         <h2>${d.name}</h2>
-        <p>Weight in overall score: ${d.weight}%</p>
-        <p>Score: <strong>${score}/100</strong></p>
-        <p>${desc}</p>
+        <p>Weight: ${d.weight}%</p>
+        <p>Score: <strong>${score}/100</strong> - ${level}</p>
+        ${progressBar(score)}
+        <p style="margin-top:10px;">${insight}</p>
+        <h3>Recommendations</h3>
+        <ul><li>${recommendation}</li></ul>
       </section>
-      <div class="page-break"></div>
-      <section class="driver-detail">
-        <h3>Detailed Analysis</h3>
-        <p>${desc}</p>
-        <p>Recommendations:</p>
-        <ul>
-          <li>${getImprovementRecommendation(d.name, score)}</li>
-        </ul>
-      </section>
-      <div class="page-break"></div>
-    `;
+      <div class="page-break"></div>`;
   }).join('');
 }
 
@@ -74,12 +89,20 @@ export async function generatePDFReport(
     date: dateStr,
   });
 
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
-  const page = await browser.newPage();
-  await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-  const pdfUint8 = await page.pdf({ format: 'A4', printBackground: true });
-  await browser.close();
-  return Buffer.from(pdfUint8);
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    const pdfUint8 = await page.pdf({ format: "A4", printBackground: true });
+    await browser.close();
+    return Buffer.from(pdfUint8);
+  } catch (err) {
+    console.error("PDF generation error", err);
+    throw new Error("Failed to generate PDF report");
+  }
 }
 
 interface HTMLParams {
@@ -93,6 +116,21 @@ interface HTMLParams {
 
 async function generateCompleteHTML(params: HTMLParams): Promise<string> {
   const { userName, companyName, industry, overallScore, categoryScores, date } = params;
+
+  const allDrivers = [...CORE_DRIVERS, ...SUPPLEMENTAL_DRIVERS];
+
+  const summaryRows = allDrivers
+    .map(d => `<tr><td>${d.name}</td><td style="text-align:right;">${categoryScores[d.name]?.score ?? 0}</td></tr>`) 
+    .join("");
+
+  const sorted = allDrivers
+    .map(d => ({ name: d.name, score: categoryScores[d.name]?.score ?? 0 }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3);
+  const priorityList = sorted
+    .map(s => `<li>${s.name} - ${s.score}/100</li>`)
+    .join("");
+
   return `
   <!DOCTYPE html>
   <html>
@@ -104,6 +142,8 @@ async function generateCompleteHTML(params: HTMLParams): Promise<string> {
       .cover { background: linear-gradient(135deg,#1E40AF,#3B82F6); color:white; text-align:center; padding:200px 40px; }
       h1,h2,h3 { margin:0 0 20px; }
       section { margin-bottom:40px; }
+      table { width:100%; border-collapse:collapse; }
+      td, th { padding:8px; border-bottom:1px solid #ddd; }
     </style>
   </head>
   <body>
@@ -118,22 +158,20 @@ async function generateCompleteHTML(params: HTMLParams): Promise<string> {
     </div>
     <div class="page-break"></div>
     <section>
-      <h2>Executive Welcome</h2>
-      <p>Thank you for completing the Value Builder Assessment. This report measures 14 drivers across two parts: 8 Core Value Builder Drivers (70% of your score) and 6 Supplemental Deep-Dive areas (30%).</p>
-      <p>We appreciate the opportunity to support your growth.</p>
-    </section>
-    <div class="page-break"></div>
-    <section>
-      <h2>Assessment Overview</h2>
+      <h2>Executive Summary</h2>
       <p>Industry: ${industry || 'Not specified'}</p>
-      <p>Overall Score: <strong>${overallScore}/100</strong> (${getGrade(overallScore)})</p>
+      <p><strong>Overall Score: ${overallScore}/100</strong> (${getGrade(overallScore)})</p>
+      <table>${summaryRows}</table>
     </section>
     <div class="page-break"></div>
-    ${generateDriverPages(CORE_DRIVERS, categoryScores)}
-    ${generateDriverPages(SUPPLEMENTAL_DRIVERS, categoryScores)}
+    ${generateDriverPages(allDrivers, categoryScores)}
     <section>
-      <h2>Action Plan Summary</h2>
-      <p>This section highlights key initiatives to improve your overall value.</p>
+      <h2>Priority Areas</h2>
+      <ul>${priorityList}</ul>
+    </section>
+    <section>
+      <h2>Next Steps</h2>
+      <p>Use this report to focus on your weakest areas first and monitor progress regularly.</p>
     </section>
   </body>
   </html>`;
