@@ -1,8 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+<<<<<<< HEAD
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, AssessmentAnswer, CategoryScore } from "@shared/schema";
 import { generatePDFReport } from "./pdfGenerator";
+=======
+import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema } from "@shared/schema";
+// import { generatePDFReport } from "./pdfGenerator"; // Temporarily disabled
+>>>>>>> 07429cd (Disable PDF report generation and revise email content for assessment results)
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -151,21 +156,28 @@ async function sendResultEmail(resultData: any) {
   });
 
   // Get full assessment with answers
-  const assessment = await storage.getAssessmentBySessionId(sessionId);
-  const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
+  // const assessment = await storage.getAssessmentBySessionId(sessionId);
+  // const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
 
-  // Generate PDF report
-  console.log('Generating PDF report...');
-  const pdfBuffer = await generatePDFReport(
-    userName,
-    userEmail,
-    companyName,
-    industry,
-    overallScore,
-    categoryBreakdown,
-    answers
-  );
-  console.log('PDF generated successfully');
+  // Generate PDF report - TEMPORARILY DISABLED
+  // console.log('Generating PDF report...');
+  // const pdfBuffer = await generatePDFReport(
+  //   userName,
+  //   userEmail,
+  //   companyName,
+  //   industry,
+  //   overallScore,
+  //   categoryBreakdown,
+  //   answers
+  // );
+  // console.log('PDF generated successfully');
+
+  // Generate category breakdown text
+  const breakdownText = Object.entries(categoryBreakdown as Record<string, any>)
+    .map(([category, data]: [string, any]) => {
+      return `${category}: ${data.score}/${data.maxScore} (${Math.round((data.score / data.maxScore) * 100)}%)`;
+    })
+    .join('\n');
 
   const categoriesArray = Object.entries(categoryBreakdown) as [string, CategoryScore][];
   const topPerforming = [...categoriesArray]
@@ -178,6 +190,7 @@ async function sendResultEmail(resultData: any) {
     .map(([name]) => name);
 
   const emailContent = `
+<<<<<<< HEAD
       <h2>Dux Vitae Capital - Value Builder Assessment Completed</h2>
       <p>Dear ${userName},</p>
       <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached.</p>
@@ -190,6 +203,24 @@ async function sendResultEmail(resultData: any) {
 
   const attachmentName = `DuxVitae_ValueBuilder_Report_${(companyName || userName).replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
 
+=======
+    <h2>Value Builder Assessment Results</h2>
+    <p><strong>Participant:</strong> ${userName}</p>
+    <p><strong>Company:</strong> ${companyName || 'Not specified'}</p>
+    <p><strong>Industry:</strong> ${industry || 'Not specified'}</p>
+    <p><strong>Email:</strong> ${userEmail}</p>
+
+    <h3>Overall Score: ${overallScore}/100</h3>
+
+    <h3>Category Breakdown:</h3>
+    <pre>${breakdownText}</pre>
+
+    <p>This assessment was completed on ${new Date().toLocaleDateString()}.</p>
+    <p>Best regards,<br>Value Builder Assessment Team</p>
+  `;
+
+  // Add SMTP verification first
+>>>>>>> 07429cd (Disable PDF report generation and revise email content for assessment results)
   try {
     await transporter.verify();
     console.log('SMTP connection verified successfully');
@@ -201,21 +232,36 @@ async function sendResultEmail(resultData: any) {
 
     console.log('Sending email to user:', userEmail);
     const userMailInfo = await transporter.sendMail({
+<<<<<<< HEAD
       ...mailOptions,
       to: userEmail,
       subject: 'Your Value Builder Assessment Report',
+=======
+      from: `"Value Builder Assessment" <${smtpUser}>`,
+      to: userEmail,
+      subject: "Your Value Builder Assessment Results",
+>>>>>>> 07429cd (Disable PDF report generation and revise email content for assessment results)
       html: emailContent,
     });
-    console.log('Report sent to user', userMailInfo.messageId);
+    console.log('Email sent to user successfully:', userMailInfo.messageId);
 
+<<<<<<< HEAD
+=======
+    // Send to admin
+>>>>>>> 07429cd (Disable PDF report generation and revise email content for assessment results)
     console.log('Sending email to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
       ...mailOptions,
       to: smtpUser,
+<<<<<<< HEAD
       subject: `New Assessment: ${userName} - Score ${overallScore}/100`,
       html: emailContent + `<p>User Email: ${userEmail}</p>`,
+=======
+      subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
+      html: emailContent,
+>>>>>>> 07429cd (Disable PDF report generation and revise email content for assessment results)
     });
-    console.log('Report sent to admin', adminMailInfo.messageId);
+    console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
     return 'success';
   } catch (error: any) {
