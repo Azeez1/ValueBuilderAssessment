@@ -273,21 +273,72 @@ async function generateCategoryDetailPageWithAI(
   isCore: boolean,
   answers: Record<string, AssessmentAnswer>
 ) {
-  doc.addPage();
+  const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
+  const details = (descriptions as Record<string, any>)[category];
 
-  // Fixed positioning
-  let yPos = 50;
+  if (!details) return;
 
-  // Draw gauge on the right
-  drawScoreGauge(doc, 350, 50, score.score);
+  // Position gauge on the far right
+  const pageWidth = doc.page.width;
+  const gaugeX = pageWidth - 280;
+  drawScoreGauge(doc, gaugeX, 50, score.score);
 
-  // Title and content on the left - with proper spacing
-  doc.fontSize(20).fillColor('#1e40af').text(category, 50, yPos, { width: 280 });
-  yPos += 30;
+  // Constrain text width to avoid gauge overlap
+  const textMaxWidth = gaugeX - 100;
 
-  // Continue with rest of function...
+  // Title
+  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, {
+    width: textMaxWidth
+  });
 
-  let currentY = doc.y;
+  // Subtitle
+  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, 50, 80, {
+    width: textMaxWidth,
+    lineGap: 3
+  });
+
+  // Score display
+  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 50, 120, {
+    width: 100,
+    align: 'center'
+  });
+  doc.fontSize(16).fillColor('#6b7280').text('/100', 150, 135);
+
+  // Main description
+  doc
+    .fontSize(11)
+    .fillColor('#111827')
+    .text(details.description, 50, 200, {
+      width: textMaxWidth,
+      align: 'justify',
+      lineGap: 4
+    });
+
+  let currentY = doc.y + 20;
+
+  // Key Assessment Areas
+  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, currentY);
+  currentY += 20;
+  details.insights.forEach((insight: string) => {
+    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, 70, currentY, {
+      width: textMaxWidth - 20,
+      lineGap: 3
+    });
+    currentY = doc.y + 8;
+  });
+
+  if (score.score < 60) {
+    currentY += 15;
+    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, currentY);
+
+    currentY += 15;
+    const recommendations = getImprovementRecommendation(category, score.score);
+    doc.fontSize(10).fillColor('#374151').text(recommendations, 50, currentY, {
+      width: textMaxWidth,
+      align: 'justify',
+      lineGap: 4
+    });
+  }
 
   if (score.score < 80) {
     const categoryAnswers = Object.entries(answers)
@@ -311,7 +362,7 @@ async function generateCategoryDetailPageWithAI(
       doc.fontSize(12).fillColor('#1e40af').text('Analysis:', 50, currentY);
       currentY += 15;
       doc.fontSize(9).fillColor('#374151').text(categoryInsight, 50, currentY, {
-        width: 500,
+        width: textMaxWidth,
         align: 'justify',
         lineGap: 3
       });
@@ -508,31 +559,31 @@ export async function generatePDFReport(
         addFooterToCurrentPage();
       }
 
-      // Category detail pages - only for drivers with scores
-      for (const category of coreDrivers) {
+      // Category detail pages - combine consecutively without blank pages
+      let categoriesProcessed = 0;
+      const allCategories = [...coreDrivers, ...supplementalDrivers];
+
+      for (const category of allCategories) {
         if (categoryScores[category]) {
+          if (categoriesProcessed > 0) {
+            addFooterToCurrentPage();
+          }
+          doc.addPage();
+
           await generateCategoryDetailPageWithAI(
             doc,
             category,
             categoryScores[category],
-            true,
+            coreDrivers.includes(category),
             answers
           );
-          addFooterToCurrentPage();
+
+          categoriesProcessed++;
         }
       }
 
-      for (const category of supplementalDrivers) {
-        if (categoryScores[category]) {
-          await generateCategoryDetailPageWithAI(
-            doc,
-            category,
-            categoryScores[category],
-            false,
-            answers
-          );
-          addFooterToCurrentPage();
-        }
+      if (categoriesProcessed > 0) {
+        addFooterToCurrentPage();
       }
 
       doc.end();
