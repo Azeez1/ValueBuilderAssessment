@@ -8,6 +8,15 @@ export interface IStorage {
   getAssessmentBySessionId(sessionId: string): Promise<Assessment | undefined>;
   createResult(result: InsertResult): Promise<Result>;
   getResultsByEmail(email: string): Promise<Result[]>;
+  cacheInsights(sessionId: string, insights: InsightCache): Promise<void>;
+  getCachedInsights(sessionId: string): Promise<InsightCache | null>;
+}
+
+export interface InsightCache {
+  sessionId: string;
+  insights: string;
+  categoryInsights: Record<string, string>;
+  createdAt: Date;
 }
 
 export class SQLiteStorage implements IStorage {
@@ -106,6 +115,16 @@ export class SQLiteStorage implements IStorage {
       console.error('Error retrieving results:', error);
       throw error;
     }
+  }
+
+  async cacheInsights(sessionId: string, insights: InsightCache): Promise<void> {
+    // Placeholder implementation for caching
+    console.log(`Caching insights for session ${sessionId}`);
+  }
+
+  async getCachedInsights(sessionId: string): Promise<InsightCache | null> {
+    console.log(`Retrieving cached insights for session ${sessionId}`);
+    return null;
   }
 }
 
