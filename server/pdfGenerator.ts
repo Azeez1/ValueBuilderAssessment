@@ -1,5 +1,66 @@
 import PDFDocument from 'pdfkit';
+import type PDFKit from 'pdfkit';
 import { AssessmentAnswer, CategoryScore } from '@shared/schema';
+import {
+  coreDriverDescriptions,
+  supplementalDriverDescriptions
+} from './reportTemplates';
+
+function generateCategoryDetailPage(
+  doc: PDFKit.PDFDocument,
+  category: string,
+  score: CategoryScore,
+  isCore: boolean
+) {
+  const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
+  const details = (descriptions as Record<string, any>)[category];
+
+  if (!details) return;
+
+  // Category header
+  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50);
+
+  doc.fontSize(14).fillColor('#6b7280').text(details.subtitle, 50, 80);
+
+  // Score display
+  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 450, 50);
+  doc.fontSize(16).fillColor('#6b7280').text('/100', 500, 65);
+
+  // Description
+  doc
+    .fontSize(12)
+    .fillColor('#111827')
+    .text(details.description, 50, 120, {
+      width: 500,
+      align: 'justify',
+      lineGap: 5
+    });
+
+  // Key insights
+  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, doc.y + 20);
+
+  details.insights.forEach((insight: string) => {
+    doc.fontSize(11).fillColor('#374151').text(`• ${insight}`, 70, doc.y + 10, {
+      width: 480,
+      lineGap: 3
+    });
+  });
+
+  // Improvement recommendations based on score
+  if (score.score < 80) {
+    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, doc.y + 20);
+
+    const recommendations = getImprovementRecommendation(category, score.score);
+    doc
+      .fontSize(11)
+      .fillColor('#374151')
+      .text(recommendations, 50, doc.y + 10, {
+        width: 500,
+        align: 'justify',
+        lineGap: 5
+      });
+  }
+}
 
 export async function generatePDFReport(
   userName: string,
@@ -161,6 +222,43 @@ export async function generatePDFReport(
       }
 
       addFooter();
+
+      const coreDrivers = [
+        'Financial Performance',
+        'Growth Potential',
+        'Switzerland Structure',
+        'Valuation Teeter-Totter',
+        'Recurring Revenue',
+        'Monopoly Control',
+        'Customer Satisfaction',
+        'Hub & Spoke'
+      ];
+
+      const supplementalDrivers = [
+        'Financial Health & Analysis',
+        'Market & Competitive Position',
+        'Operational Excellence',
+        'Human Capital & Organization',
+        'Legal, Risk & Compliance',
+        'Strategic Assets & Intangibles'
+      ];
+
+      for (const category of coreDrivers) {
+        if (categoryScores[category]) {
+          doc.addPage();
+          generateCategoryDetailPage(doc, category, categoryScores[category], true);
+          addFooter();
+        }
+      }
+
+      for (const category of supplementalDrivers) {
+        if (categoryScores[category]) {
+          doc.addPage();
+          generateCategoryDetailPage(doc, category, categoryScores[category], false);
+          addFooter();
+        }
+      }
+
       doc.end();
     } catch (error) {
       reject(error);
@@ -237,5 +335,11 @@ function getStrategicRecommendations(
   }
 
   return items;
+}
+
+function getScoreColor(score: number): string {
+  if (score >= 80) return '#10b981';
+  if (score >= 60) return '#f59e0b';
+  return '#ef4444';
 }
 
