@@ -1,335 +1,142 @@
 import puppeteer from 'puppeteer';
 import { AssessmentAnswer, CategoryScore } from "@shared/schema";
 
+interface DriverInfo { name: string; weight: number; }
+
+const CORE_DRIVERS: DriverInfo[] = [
+  { name: "Financial Performance", weight: 15 },
+  { name: "Growth Potential", weight: 15 },
+  { name: "Switzerland Structure", weight: 12 },
+  { name: "Valuation Teeter-Totter", weight: 12 },
+  { name: "Recurring Revenue", weight: 13 },
+  { name: "Monopoly Control", weight: 12 },
+  { name: "Customer Satisfaction", weight: 11 },
+  { name: "Hub & Spoke", weight: 10 },
+];
+
+const SUPPLEMENTAL_DRIVERS: DriverInfo[] = [
+  { name: "Financial Health & Analysis", weight: 5 },
+  { name: "Market & Competitive Position", weight: 5 },
+  { name: "Operational Excellence", weight: 5 },
+  { name: "Human Capital & Organization", weight: 5 },
+  { name: "Legal, Risk & Compliance", weight: 5 },
+  { name: "Strategic Assets & Intangibles", weight: 5 },
+];
+
+function performanceDescription(score: number): string {
+  if (score >= 80) return "Excellent - Industry-leading performance";
+  if (score >= 60) return "Good - Performing well with optimization opportunities";
+  if (score >= 40) return "Below Average - Significant improvement needed";
+  return "Critical - Requires immediate attention";
+}
+
+function generateDriverPages(drivers: DriverInfo[], categoryScores: Record<string, CategoryScore>): string {
+  return drivers.map(d => {
+    const score = categoryScores[d.name]?.score ?? 0;
+    const desc = performanceDescription(score);
+    return `
+      <section class="driver-cover">
+        <h2>${d.name}</h2>
+        <p>Weight in overall score: ${d.weight}%</p>
+        <p>Score: <strong>${score}/100</strong></p>
+        <p>${desc}</p>
+      </section>
+      <div class="page-break"></div>
+      <section class="driver-detail">
+        <h3>Detailed Analysis</h3>
+        <p>${desc}</p>
+        <p>Recommendations:</p>
+        <ul>
+          <li>${getImprovementRecommendation(d.name, score)}</li>
+        </ul>
+      </section>
+      <div class="page-break"></div>
+    `;
+  }).join('');
+}
+
 export async function generatePDFReport(
   userName: string,
-  userEmail: string,
+  _userEmail: string,
   companyName: string,
   industry: string,
   overallScore: number,
   categoryScores: Record<string, CategoryScore>,
-  answers: Record<string, AssessmentAnswer>
+  _answers: Record<string, AssessmentAnswer>
 ): Promise<Buffer> {
-  // Identify areas needing improvement (scores below 60)
-  const areasForImprovement = Object.entries(categoryScores)
-    .filter(([_, score]) => score.score < 60)
-    .sort((a, b) => a[1].score - b[1].score); // Sort by lowest score first
-
-  // Get top performing areas (scores above 80)
-  const topPerformingAreas = Object.entries(categoryScores)
-    .filter(([_, score]) => score.score >= 80)
-    .sort((a, b) => b[1].score - a[1].score);
-
-  const coreDrivers = [
-    "Financial Performance",
-    "Growth Potential",
-    "Switzerland Structure",
-    "Valuation Teeter-Totter",
-    "Recurring Revenue",
-    "Monopoly Control",
-    "Customer Satisfaction",
-    "Hub & Spoke",
-  ];
-
-  const supplementalDrivers = [
-    "Financial Health & Analysis",
-    "Market & Competitive Position",
-    "Operational Excellence",
-    "Human Capital & Organization",
-    "Legal, Risk & Compliance",
-    "Strategic Assets & Intangibles",
-  ];
-
-  // Generate HTML content for PDF
-  const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      color: #333;
-    }
-    .header {
-      background: #1e40af;
-      color: white;
-      padding: 30px;
-      margin: -20px -20px 30px -20px;
-      text-align: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 28px;
-    }
-    .header p {
-      margin: 10px 0 0 0;
-      font-size: 16px;
-      opacity: 0.9;
-    }
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      margin-bottom: 40px;
-    }
-    .info-box {
-      background: #f3f4f6;
-      padding: 20px;
-      border-radius: 8px;
-    }
-    .info-box h3 {
-      margin: 0 0 10px 0;
-      color: #1e40af;
-      font-size: 14px;
-      text-transform: uppercase;
-    }
-    .info-box p {
-      margin: 0;
-      font-size: 18px;
-      font-weight: bold;
-    }
-    .score-section {
-      text-align: center;
-      margin: 40px 0;
-      padding: 30px;
-      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-      color: white;
-      border-radius: 12px;
-    }
-    .score-section h2 {
-      margin: 0;
-      font-size: 24px;
-    }
-    .score-value {
-      font-size: 72px;
-      font-weight: bold;
-      margin: 20px 0;
-    }
-    .score-grade {
-      font-size: 48px;
-      opacity: 0.9;
-    }
-    .category-section {
-      margin: 40px 0;
-    }
-    .category-item {
-      margin: 15px 0;
-      background: #f9fafb;
-      padding: 20px;
-      border-radius: 8px;
-      border-left: 4px solid #e5e7eb;
-    }
-    .category-item.high-score {
-      border-left-color: #10b981;
-      background: #f0fdf4;
-    }
-    .category-item.medium-score {
-      border-left-color: #f59e0b;
-      background: #fffbeb;
-    }
-    .category-item.low-score {
-      border-left-color: #ef4444;
-      background: #fef2f2;
-    }
-    .category-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .category-name {
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .category-score {
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: #e5e7eb;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      background: #3b82f6;
-      transition: width 0.3s;
-    }
-    .improvement-section {
-      margin: 40px 0;
-      padding: 30px;
-      background: #fef3c7;
-      border-radius: 12px;
-      border: 2px solid #fbbf24;
-    }
-    .improvement-section h2 {
-      color: #92400e;
-      margin-top: 0;
-    }
-    .improvement-item {
-      margin: 15px 0;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-    }
-    .improvement-item h4 {
-      margin: 0 0 8px 0;
-      color: #dc2626;
-    }
-    .recommendations {
-      margin-top: 40px;
-      padding: 30px;
-      background: #dbeafe;
-      border-radius: 12px;
-    }
-    .recommendations h2 {
-      color: #1e3a8a;
-      margin-top: 0;
-    }
-    .recommendation-item {
-      margin: 15px 0;
-      padding-left: 20px;
-      position: relative;
-    }
-    .recommendation-item:before {
-      content: "→";
-      position: absolute;
-      left: 0;
-      color: #3b82f6;
-      font-weight: bold;
-    }
-    .footer {
-      margin-top: 60px;
-      padding-top: 30px;
-      border-top: 2px solid #e5e7eb;
-      text-align: center;
-      color: #6b7280;
-      font-size: 12px;
-    }
-    @page {
-      margin: 0;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Value Builder Assessment Report</h1>
-    <p>Comprehensive Business Valuation Analysis</p>
-  </div>
-
-  <div class="info-grid">
-    <div class="info-box">
-      <h3>Assessed By</h3>
-      <p>${userName}</p>
-    </div>
-    <div class="info-box">
-      <h3>Company</h3>
-      <p>${companyName || 'Not Specified'}</p>
-    </div>
-    <div class="info-box">
-      <h3>Industry</h3>
-      <p>${industry || 'Not Specified'}</p>
-    </div>
-    <div class="info-box">
-      <h3>Assessment Date</h3>
-      <p>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-    </div>
-  </div>
-
-  <div class="score-section">
-    <h2>Overall Value Builder Score</h2>
-    <div class="score-value">${overallScore}/100</div>
-    <div class="score-grade">Grade: ${getGrade(overallScore)}</div>
-  </div>
-
-  <div class="category-section">
-    <h2>Core Value Builder Drivers</h2>
-    ${coreDrivers
-      .map(driver => {
-        const score = categoryScores[driver]?.score || 0;
-        const scoreClass = score >= 80 ? 'high-score' : score >= 60 ? 'medium-score' : 'low-score';
-        return `
-          <div class="category-item ${scoreClass}">
-            <div class="category-header">
-              <span class="category-name">${driver}</span>
-              <span class="category-score">${score}/100</span>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" style="width: ${score}%"></div></div>
-          </div>
-        `;
-      })
-      .join('')}
-  </div>
-
-  <div class="category-section">
-    <h2>Supplemental Deep-Dive Analysis</h2>
-    ${supplementalDrivers
-      .map(driver => {
-        const score = categoryScores[driver]?.score || 0;
-        const scoreClass = score >= 80 ? 'high-score' : score >= 60 ? 'medium-score' : 'low-score';
-        return `
-          <div class="category-item ${scoreClass}">
-            <div class="category-header">
-              <span class="category-name">${driver}</span>
-              <span class="category-score">${score}/100</span>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" style="width: ${score}%"></div></div>
-          </div>
-        `;
-      })
-      .join('')}
-  </div>
-
-  ${areasForImprovement.length > 0 ? `
-    <div class="improvement-section">
-      <h2>🎯 Priority Areas for Improvement</h2>
-      <p>Focus on these areas to significantly increase your business value:</p>
-      ${areasForImprovement.map(([category, score]) => `
-        <div class="improvement-item">
-          <h4>${category} (Current Score: ${score.score}/100)</h4>
-          <p>${getImprovementRecommendation(category, score.score)}</p>
-        </div>
-      `).join('')}
-    </div>
-  ` : ''}
-
-  <div class="recommendations">
-    <h2>💡 Strategic Recommendations</h2>
-    ${getStrategicRecommendations(overallScore, categoryScores)}
-  </div>
-
-  <div class="footer">
-    <p>This report is confidential and proprietary to ${companyName || userName}</p>
-    <p>Generated by Dux Vitae Capital | ${new Date().toISOString()}</p>
-    <p>For questions, contact: aoseni@duxvitaecapital.com</p>
-  </div>
-</body>
-</html>
-  `;
-
-  // Launch puppeteer and generate PDF
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  const dateStr = new Date().toLocaleDateString();
+  const htmlContent = await generateCompleteHTML({
+    userName,
+    companyName,
+    industry,
+    overallScore,
+    categoryScores,
+    date: dateStr,
   });
 
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-  const pdfBuffer = await page.pdf({
-    format: 'A4',
-    printBackground: true,
-    margin: { top: 0, right: 0, bottom: 0, left: 0 }
-  });
-
+  const pdfUint8 = await page.pdf({ format: 'A4', printBackground: true });
   await browser.close();
+  return Buffer.from(pdfUint8);
+}
 
-  return pdfBuffer as Buffer;
+interface HTMLParams {
+  userName: string;
+  companyName: string;
+  industry: string;
+  overallScore: number;
+  categoryScores: Record<string, CategoryScore>;
+  date: string;
+}
+
+async function generateCompleteHTML(params: HTMLParams): Promise<string> {
+  const { userName, companyName, industry, overallScore, categoryScores, date } = params;
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body { font-family: Arial, sans-serif; margin:40px; }
+      .page-break { page-break-after: always; }
+      .cover { background: linear-gradient(135deg,#1E40AF,#3B82F6); color:white; text-align:center; padding:200px 40px; }
+      h1,h2,h3 { margin:0 0 20px; }
+      section { margin-bottom:40px; }
+    </style>
+  </head>
+  <body>
+    <div class="cover">
+      <h1>Value Builder Assessment Report</h1>
+      <h2>Comprehensive Business Valuation Analysis</h2>
+      <p>PREPARED FOR: ${userName}</p>
+      <p>${companyName || ''}</p>
+      <p>${date}</p>
+      <p>Dux Vitae Capital</p>
+      <p>14 comprehensive drivers of business value</p>
+    </div>
+    <div class="page-break"></div>
+    <section>
+      <h2>Executive Welcome</h2>
+      <p>Thank you for completing the Value Builder Assessment. This report measures 14 drivers across two parts: 8 Core Value Builder Drivers (70% of your score) and 6 Supplemental Deep-Dive areas (30%).</p>
+      <p>We appreciate the opportunity to support your growth.</p>
+    </section>
+    <div class="page-break"></div>
+    <section>
+      <h2>Assessment Overview</h2>
+      <p>Industry: ${industry || 'Not specified'}</p>
+      <p>Overall Score: <strong>${overallScore}/100</strong> (${getGrade(overallScore)})</p>
+    </section>
+    <div class="page-break"></div>
+    ${generateDriverPages(CORE_DRIVERS, categoryScores)}
+    ${generateDriverPages(SUPPLEMENTAL_DRIVERS, categoryScores)}
+    <section>
+      <h2>Action Plan Summary</h2>
+      <p>This section highlights key initiatives to improve your overall value.</p>
+    </section>
+  </body>
+  </html>`;
 }
 
 function getGrade(score: number): string {
@@ -341,44 +148,22 @@ function getGrade(score: number): string {
   return 'F';
 }
 
-function getImprovementRecommendation(category: string, score: number): string {
+function getImprovementRecommendation(category: string, _score: number): string {
   const recommendations: Record<string, string> = {
-    "Financial Performance": "Consider implementing stronger financial controls, improving profit margins, and establishing more predictable revenue streams.",
-    "Growth Potential": "Focus on market expansion strategies, product innovation, and developing scalable business processes.",
-    "Switzerland Structure": "Work on reducing dependencies on key customers, suppliers, or employees. Diversify your risk.",
-    "Valuation Teeter-Totter": "Strengthen your competitive position and build sustainable advantages in your market.",
-    "Recurring Revenue": "Develop subscription models, long-term contracts, or membership programs to increase predictable revenue.",
-    "Monopoly Control": "Build stronger barriers to entry, protect intellectual property, and increase pricing power.",
-    "Customer Satisfaction": "Implement customer feedback systems, improve service quality, and track NPS scores.",
-    "Hub & Spoke": "Reduce owner dependence by building strong management teams and documenting all processes.",
+    "Financial Performance": "Strengthen financial controls and improve margins.",
+    "Growth Potential": "Explore market expansion and scalable processes.",
+    "Switzerland Structure": "Reduce dependencies on key customers or suppliers.",
+    "Valuation Teeter-Totter": "Build sustainable competitive advantages.",
+    "Recurring Revenue": "Develop predictable recurring revenue streams.",
+    "Monopoly Control": "Protect intellectual property and increase pricing power.",
+    "Customer Satisfaction": "Enhance customer feedback and service quality.",
+    "Hub & Spoke": "Document processes and build management depth.",
+    "Financial Health & Analysis": "Maintain clean financial statements and KPIs.",
+    "Market & Competitive Position": "Differentiate clearly from competitors.",
+    "Operational Excellence": "Streamline operations for efficiency.",
+    "Human Capital & Organization": "Invest in talent development and retention.",
+    "Legal, Risk & Compliance": "Address legal exposures and compliance gaps.",
+    "Strategic Assets & Intangibles": "Leverage unique assets and brand value.",
   };
-
-  return recommendations[category] || "Focus on systematic improvements in this area to increase business value.";
-}
-
-function getStrategicRecommendations(overallScore: number, categoryScores: Record<string, CategoryScore>): string {
-  const items = [] as string[];
-
-  if (overallScore < 60) {
-    items.push("Your business has significant opportunities for value improvement. Focus on the lowest-scoring areas first.");
-    items.push("Consider engaging a business advisor to help develop a comprehensive improvement plan.");
-  } else if (overallScore < 80) {
-    items.push("Your business shows good potential. Targeted improvements in key areas can significantly increase value.");
-    items.push("Prioritize 2-3 improvement areas and develop 90-day action plans for each.");
-  } else {
-    items.push("Your business is performing well. Focus on maintaining strengths while addressing any remaining gaps.");
-    items.push("Consider strategic initiatives to move from good to exceptional in your strongest areas.");
-  }
-
-  const recurringRevScore = categoryScores["Recurring Revenue"]?.score || 0;
-  if (recurringRevScore < 60) {
-    items.push("Urgently develop recurring revenue streams to improve business predictability and value.");
-  }
-
-  const hubSpokeScore = categoryScores["Hub & Spoke"]?.score || 0;
-  if (hubSpokeScore < 60) {
-    items.push("Reduce owner dependence by developing management systems and key employee capabilities.");
-  }
-
-  return items.map(item => `<div class="recommendation-item">${item}</div>`).join('');
+  return recommendations[category] || "Focus on systematic improvements in this area.";
 }
