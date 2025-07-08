@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, AssessmentAnswer, CategoryScore } from "@shared/schema";
-import { generatePDFReport } from "./pdfGenerator";
+import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
+// import { generatePDFReport } from "./pdfGenerator"; // Temporarily disabled
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -154,18 +154,18 @@ async function sendResultEmail(resultData: any) {
   const assessment = await storage.getAssessmentBySessionId(sessionId);
   const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
 
-  // Generate PDF report
-  console.log('Generating PDF report...');
-  const pdfBuffer = await generatePDFReport(
-    userName,
-    userEmail,
-    companyName,
-    industry,
-    overallScore,
-    categoryBreakdown,
-    answers
-  );
-  console.log('PDF generated successfully');
+  // Generate PDF report (temporarily disabled)
+  // console.log('Generating PDF report...');
+  // const pdfBuffer = await generatePDFReport(
+  //   userName,
+  //   userEmail,
+  //   companyName,
+  //   industry,
+  //   overallScore,
+  //   categoryBreakdown,
+  //   answers
+  // );
+  // console.log('PDF generated successfully');
 
   const emailContent = `
       <h2>Value Builder Assessment Completed</h2>
@@ -192,31 +192,25 @@ async function sendResultEmail(resultData: any) {
   }
 
   try {
-    const mailOptions = {
-      from: `"Value Builder Assessment" <${smtpUser}>`,
-      to: userEmail,
-      subject: 'Your Value Builder Assessment Report',
-      html: emailContent,
-      attachments: [{
-        filename: `ValueBuilder_Report_${userName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
-        content: pdfBuffer
-      }]
-    };
-
     // Send to user
     console.log('Sending email to user:', userEmail);
-    const userMailInfo = await transporter.sendMail(mailOptions);
-    console.log('Report sent to user', userMailInfo.messageId);
+    const userMailInfo = await transporter.sendMail({
+      from: `"Value Builder Assessment" <${smtpUser}>`,
+      to: userEmail,
+      subject: "Your Value Builder Assessment Results",
+      html: emailContent,
+    });
+    console.log('Email sent to user successfully:', userMailInfo.messageId);
 
     // Send to admin
     console.log('Sending email to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
-      ...mailOptions,
-      to: 'aoseni@duxvitaecapital.com',
-      subject: `New Assessment: ${userName} (${companyName}) - Score: ${overallScore}`,
-      html: emailContent + `<p>User Email: ${userEmail}</p>`
+      from: `"Value Builder Assessment" <${smtpUser}>`,
+      to: smtpUser,
+      subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
+      html: emailContent,
     });
-    console.log('Report sent to admin', adminMailInfo.messageId);
+    console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
     return 'success';
 
