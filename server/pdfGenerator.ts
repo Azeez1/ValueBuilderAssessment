@@ -6,59 +6,244 @@ import {
   supplementalDriverDescriptions
 } from './reportTemplates';
 
+// Driver categories used throughout the report
+export const coreDrivers = [
+  'Financial Performance',
+  'Growth Potential',
+  'Switzerland Structure',
+  'Valuation Teeter-Totter',
+  'Recurring Revenue',
+  'Monopoly Control',
+  'Customer Satisfaction',
+  'Hub & Spoke'
+];
+
+export const supplementalDrivers = [
+  'Financial Health & Analysis',
+  'Market & Competitive Position',
+  'Operational Excellence',
+  'Human Capital & Organization',
+  'Legal, Risk & Compliance',
+  'Strategic Assets & Intangibles'
+];
+
+function drawScoreGauge(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  score: number,
+  industryAvg?: number
+) {
+  const centerX = x + 150;
+  const centerY = y + 100;
+  const radius = 80;
+
+  const segments = [
+    { start: 180, end: 225, color: '#ef4444' },
+    { start: 225, end: 315, color: '#f59e0b' },
+    { start: 315, end: 360, color: '#10b981' }
+  ];
+
+  segments.forEach((segment) => {
+    doc.save();
+    doc.path(
+      `M ${centerX} ${centerY}
+       A ${radius} ${radius} 0 0 1 ${centerX +
+      radius * Math.cos((segment.start * Math.PI) / 180)} ${centerY +
+      radius * Math.sin((segment.start * Math.PI) / 180)}
+       A ${radius} ${radius} 0 0 1 ${centerX +
+      radius * Math.cos((segment.end * Math.PI) / 180)} ${centerY +
+      radius * Math.sin((segment.end * Math.PI) / 180)}
+       L ${centerX} ${centerY} Z`
+    );
+    doc.fillColor(segment.color).fill();
+    doc.restore();
+  });
+
+  doc.circle(centerX, centerY, radius - 20).fillColor('white').fill();
+
+  const angle = 180 + (score / 100) * 180;
+  const needleLength = radius - 25;
+  const needleX = centerX + needleLength * Math.cos((angle * Math.PI) / 180);
+  const needleY = centerY + needleLength * Math.sin((angle * Math.PI) / 180);
+
+  doc.save();
+  doc.lineWidth(3).strokeColor('#374151');
+  doc.moveTo(centerX, centerY).lineTo(needleX, needleY).stroke();
+  doc.circle(centerX, centerY, 5).fillColor('#374151').fill();
+  doc.restore();
+
+  doc
+    .fontSize(36)
+    .fillColor(getScoreColor(score))
+    .text(score.toString(), centerX - 30, centerY + 20, { width: 60, align: 'center' });
+
+  if (industryAvg !== undefined) {
+    doc
+      .fontSize(10)
+      .fillColor('#6b7280')
+      .text('INDUSTRY', centerX - 50, y - 20, { width: 100, align: 'center' });
+    doc
+      .text(`AVERAGE: ${industryAvg}`, centerX - 50, y - 10, { width: 100, align: 'center' });
+  }
+
+  doc
+    .fontSize(8)
+    .fillColor('#9ca3af')
+    .text('The ValueBuilder System™', centerX - 60, centerY - 30, {
+      width: 120,
+      align: 'center'
+    });
+}
+
+function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<string, CategoryScore>) {
+  doc.addPage();
+  let currentY = 50;
+
+  doc.fontSize(24).fillColor('#1e40af').text('Performance Summary', 50, currentY, {
+    align: 'center'
+  });
+  currentY += 40;
+
+  doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', 50, currentY);
+  currentY += 30;
+
+  const coreDriverInfo = [
+    { name: 'Financial Performance', icon: '📊', industryAvg: 38 },
+    { name: 'Growth Potential', icon: '📈', industryAvg: 61 },
+    { name: 'Switzerland Structure', icon: '🛡️', industryAvg: 65 },
+    { name: 'Valuation Teeter-Totter', icon: '⚖️', industryAvg: 59 },
+    { name: 'Recurring Revenue', icon: '🔄', industryAvg: 35 },
+    { name: 'Monopoly Control', icon: '💎', industryAvg: 55 },
+    { name: 'Customer Satisfaction', icon: '👥', industryAvg: 81 },
+    { name: 'Hub & Spoke', icon: '⚙️', industryAvg: 52 }
+  ];
+
+  coreDriverInfo.forEach((driver) => {
+    const score = categoryScores[driver.name];
+    if (!score) return;
+
+    drawCategoryBar(doc, 50, currentY, driver.name, score.score, score.weight, driver.icon);
+    currentY += 35;
+  });
+
+  currentY += 20;
+  doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', 50, currentY);
+  currentY += 30;
+
+  const supplementalDriverInfo = [
+    { name: 'Financial Health & Analysis', icon: '📊' },
+    { name: 'Market & Competitive Position', icon: '🎯' },
+    { name: 'Operational Excellence', icon: '⚙️' },
+    { name: 'Human Capital & Organization', icon: '👥' },
+    { name: 'Legal, Risk & Compliance', icon: '⚖️' },
+    { name: 'Strategic Assets & Intangibles', icon: '💎' }
+  ];
+
+  supplementalDriverInfo.forEach((driver) => {
+    const score = categoryScores[driver.name];
+    if (!score) return;
+
+    drawCategoryBar(doc, 50, currentY, driver.name, score.score, 0, driver.icon);
+    currentY += 35;
+  });
+}
+
+function drawCategoryBar(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  name: string,
+  score: number,
+  weight: number,
+  icon: string
+) {
+  const iconColor = score < 33 ? '#ef4444' : score < 67 ? '#f59e0b' : '#10b981';
+  doc.circle(x + 15, y + 10, 15).fillColor(iconColor).fill();
+  doc.fontSize(12).fillColor('white').text(icon, x + 10, y + 5, { width: 10 });
+
+  doc.fontSize(12).fillColor('#111827').text(name, x + 40, y + 5);
+
+  if (weight > 0) {
+    doc
+      .fontSize(10)
+      .fillColor('#6b7280')
+      .text(`(${Math.round(weight * 100)}% weight)`, x + 200, y + 7);
+  }
+
+  const barX = x + 340;
+  const barWidth = 150;
+  const barHeight = 8;
+
+  doc.rect(barX, y + 8, barWidth, barHeight).fillColor('#e5e7eb').fill();
+
+  const progressWidth = (score / 100) * barWidth;
+  const barColor = score < 33 ? '#ef4444' : score < 67 ? '#f59e0b' : '#10b981';
+  doc.rect(barX, y + 8, progressWidth, barHeight).fillColor(barColor).fill();
+
+  doc.fontSize(14).fillColor('#111827').text(score.toString(), x + 510, y + 5, {
+    width: 30,
+    align: 'right'
+  });
+}
+
 function generateCategoryDetailPage(
   doc: PDFKit.PDFDocument,
   category: string,
   score: CategoryScore,
-  isCore: boolean
+  isCore: boolean,
+  industryAvg?: number
 ) {
+  doc.addPage();
   const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
   const details = (descriptions as Record<string, any>)[category];
 
   if (!details) return;
 
-  // Category header
-  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50);
+  drawScoreGauge(doc, 350, 50, score.score, industryAvg);
 
-  doc.fontSize(14).fillColor('#6b7280').text(details.subtitle, 50, 80);
+  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, { width: 280 });
 
-  // Score display
-  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 450, 50);
-  doc.fontSize(16).fillColor('#6b7280').text('/100', 500, 65);
+  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, 50, 80, { width: 280, lineGap: 3 });
 
-  // Description
+  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 50, 120, {
+    width: 100,
+    align: 'center'
+  });
+  doc.fontSize(16).fillColor('#6b7280').text('/100', 150, 135);
+
   doc
-    .fontSize(12)
+    .fontSize(11)
     .fillColor('#111827')
-    .text(details.description, 50, 120, {
+    .text(details.description, 50, 200, {
       width: 500,
       align: 'justify',
-      lineGap: 5
+      lineGap: 4
     });
 
-  // Key insights
-  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, doc.y + 20);
+  let currentY = doc.y + 20;
+  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, currentY);
 
+  currentY += 20;
   details.insights.forEach((insight: string) => {
-    doc.fontSize(11).fillColor('#374151').text(`• ${insight}`, 70, doc.y + 10, {
+    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, 70, currentY, {
       width: 480,
       lineGap: 3
     });
+    currentY = doc.y + 8;
   });
 
-  // Improvement recommendations based on score
-  if (score.score < 80) {
-    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, doc.y + 20);
+  if (score.score < 60) {
+    currentY += 15;
+    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, currentY);
 
+    currentY += 15;
     const recommendations = getImprovementRecommendation(category, score.score);
-    doc
-      .fontSize(11)
-      .fillColor('#374151')
-      .text(recommendations, 50, doc.y + 10, {
-        width: 500,
-        align: 'justify',
-        lineGap: 5
-      });
+    doc.fontSize(10).fillColor('#374151').text(recommendations, 50, currentY, {
+      width: 500,
+      align: 'justify',
+      lineGap: 4
+    });
   }
 }
 
@@ -138,51 +323,26 @@ export async function generatePDFReport(
         })}`
       );
       addFooter();
-      doc.addPage();
-      currentY = pageMargin;
 
-      // Overall Score
-      doc.fillColor('#1e40af').fontSize(20).text('Overall Value Builder Score', {
+      // Overall Score Page with Gauge
+      doc.addPage();
+      doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 50, 50, {
         align: 'center'
       });
-      currentY = doc.y + 20;
-      doc.fontSize(72).text(`${overallScore}/100`, { align: 'center' });
-      currentY = doc.y + 10;
-      doc.fontSize(48).text(`Grade: ${getGrade(overallScore)}`, { align: 'center' });
+
+      drawScoreGauge(doc, doc.page.width / 2 - 150, 100, overallScore, 53);
+
+      doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 50, 300, {
+        align: 'center'
+      });
+      addFooter();
+
+      // Summary Page
+      generateSummaryPage(doc, categoryScores);
       addFooter();
       doc.addPage();
       currentY = pageMargin;
-
-      // Category Scores
-      doc.fillColor('#1e40af').fontSize(20).text('Performance by Category', pageMargin, currentY);
-      currentY = doc.y + 20;
-      const categories = Object.entries(categoryScores).sort((a, b) => b[1].score - a[1].score);
       const barWidth = doc.page.width - pageMargin * 2;
-
-      for (const [category, score] of categories) {
-        checkAndAddPage(30);
-        let color = '#10b981';
-        if (score.score < 60) color = '#ef4444';
-        else if (score.score < 80) color = '#f59e0b';
-
-        doc.fillColor('black').fontSize(16).text(`${category} (${score.score}/100)`, pageMargin, currentY);
-        currentY = doc.y + 5;
-        doc
-          .save()
-          .rect(pageMargin, currentY, barWidth, 8)
-          .fill('#e5e7eb')
-          .restore();
-        doc
-          .save()
-          .fillColor(color)
-          .rect(pageMargin, currentY, (barWidth * score.score) / 100, 8)
-          .fill()
-          .restore();
-        currentY += 20;
-      }
-      addFooter();
-      doc.addPage();
-      currentY = pageMargin;
 
       // Areas for Improvement
       const areasForImprovement = Object.entries(categoryScores)
@@ -223,37 +383,26 @@ export async function generatePDFReport(
 
       addFooter();
 
-      const coreDrivers = [
-        'Financial Performance',
-        'Growth Potential',
-        'Switzerland Structure',
-        'Valuation Teeter-Totter',
-        'Recurring Revenue',
-        'Monopoly Control',
-        'Customer Satisfaction',
-        'Hub & Spoke'
-      ];
-
-      const supplementalDrivers = [
-        'Financial Health & Analysis',
-        'Market & Competitive Position',
-        'Operational Excellence',
-        'Human Capital & Organization',
-        'Legal, Risk & Compliance',
-        'Strategic Assets & Intangibles'
-      ];
+      const industryAverages: Record<string, number> = {
+        'Financial Performance': 38,
+        'Growth Potential': 61,
+        'Switzerland Structure': 65,
+        'Valuation Teeter-Totter': 59,
+        'Recurring Revenue': 35,
+        'Monopoly Control': 55,
+        'Customer Satisfaction': 81,
+        'Hub & Spoke': 52
+      };
 
       for (const category of coreDrivers) {
         if (categoryScores[category]) {
-          doc.addPage();
-          generateCategoryDetailPage(doc, category, categoryScores[category], true);
+          generateCategoryDetailPage(doc, category, categoryScores[category], true, industryAverages[category]);
           addFooter();
         }
       }
 
       for (const category of supplementalDrivers) {
         if (categoryScores[category]) {
-          doc.addPage();
           generateCategoryDetailPage(doc, category, categoryScores[category], false);
           addFooter();
         }
@@ -338,8 +487,12 @@ function getStrategicRecommendations(
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return '#10b981';
-  if (score >= 60) return '#f59e0b';
+  if (score >= 67) return '#10b981';
+  if (score >= 34) return '#f59e0b';
   return '#ef4444';
+}
+
+function getScoreBarColor(score: number): string {
+  return getScoreColor(score);
 }
 
