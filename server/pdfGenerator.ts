@@ -80,13 +80,7 @@ function drawScoreGauge(
     .text(score.toString(), centerX - 30, centerY + 20, { width: 60, align: 'center' });
 
 
-  doc
-    .fontSize(8)
-    .fillColor('#9ca3af')
-    .text('The ValueBuilder System™', centerX - 60, centerY - 30, {
-      width: 120,
-      align: 'center'
-    });
+  // Removed branding text inside gauge for a cleaner look
 }
 
 function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<string, CategoryScore>) {
@@ -102,21 +96,21 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
   currentY += 30;
 
   const coreDriverInfo = [
-    { name: 'Financial Performance', icon: '📊', industryAvg: 38 },
-    { name: 'Growth Potential', icon: '📈', industryAvg: 61 },
-    { name: 'Switzerland Structure', icon: '🛡️', industryAvg: 65 },
-    { name: 'Valuation Teeter-Totter', icon: '⚖️', industryAvg: 59 },
-    { name: 'Recurring Revenue', icon: '🔄', industryAvg: 35 },
-    { name: 'Monopoly Control', icon: '💎', industryAvg: 55 },
-    { name: 'Customer Satisfaction', icon: '👥', industryAvg: 81 },
-    { name: 'Hub & Spoke', icon: '⚙️', industryAvg: 52 }
+    { name: 'Financial Performance', industryAvg: 38 },
+    { name: 'Growth Potential', industryAvg: 61 },
+    { name: 'Switzerland Structure', industryAvg: 65 },
+    { name: 'Valuation Teeter-Totter', industryAvg: 59 },
+    { name: 'Recurring Revenue', industryAvg: 35 },
+    { name: 'Monopoly Control', industryAvg: 55 },
+    { name: 'Customer Satisfaction', industryAvg: 81 },
+    { name: 'Hub & Spoke', industryAvg: 52 }
   ];
 
   coreDriverInfo.forEach((driver) => {
     const score = categoryScores[driver.name];
     if (!score) return;
 
-    drawCategoryBar(doc, 50, currentY, driver.name, score.score, score.weight, driver.icon);
+    drawCategoryBar(doc, 50, currentY, driver.name, score.score, score.weight);
     currentY += 35;
   });
 
@@ -125,19 +119,19 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
   currentY += 30;
 
   const supplementalDriverInfo = [
-    { name: 'Financial Health & Analysis', icon: '📊' },
-    { name: 'Market & Competitive Position', icon: '🎯' },
-    { name: 'Operational Excellence', icon: '⚙️' },
-    { name: 'Human Capital & Organization', icon: '👥' },
-    { name: 'Legal, Risk & Compliance', icon: '⚖️' },
-    { name: 'Strategic Assets & Intangibles', icon: '💎' }
+    { name: 'Financial Health & Analysis' },
+    { name: 'Market & Competitive Position' },
+    { name: 'Operational Excellence' },
+    { name: 'Human Capital & Organization' },
+    { name: 'Legal, Risk & Compliance' },
+    { name: 'Strategic Assets & Intangibles' }
   ];
 
   supplementalDriverInfo.forEach((driver) => {
     const score = categoryScores[driver.name];
     if (!score) return;
 
-    drawCategoryBar(doc, 50, currentY, driver.name, score.score, 0, driver.icon);
+    drawCategoryBar(doc, 50, currentY, driver.name, score.score, 0);
     currentY += 35;
   });
 }
@@ -148,36 +142,50 @@ function drawCategoryBar(
   y: number,
   name: string,
   score: number,
-  weight: number,
-  icon: string
+  weight: number
 ) {
-  const iconColor = score < 33 ? '#ef4444' : score < 67 ? '#f59e0b' : '#10b981';
-  doc.circle(x + 15, y + 10, 15).fillColor(iconColor).fill();
-  doc.fontSize(12).fillColor('white').text(icon, x + 10, y + 5, { width: 10 });
+  const lineHeight = 35;
+  const textBaseline = y + 12;
+  const circleColor = getScoreColor(score);
 
-  doc.fontSize(12).fillColor('#111827').text(name, x + 40, y + 5);
+  doc.circle(x + 15, textBaseline - 5, 8).fillColor(circleColor).fill();
+  doc.circle(x + 15, textBaseline - 5, 8).lineWidth(1).strokeColor('#ffffff').stroke();
+
+  doc.fontSize(12)
+    .fillColor('#111827')
+    .text(name, x + 40, textBaseline - 7, {
+      width: 180,
+      height: lineHeight,
+      ellipsis: true
+    });
 
   if (weight > 0) {
     doc
       .fontSize(10)
       .fillColor('#6b7280')
-      .text(`(${Math.round(weight * 100)}% weight)`, x + 200, y + 7);
+      .text(`(${Math.round(weight * 100)}% weight)`, x + 230, textBaseline - 5, {
+        width: 80,
+        align: 'left'
+      });
   }
 
-  const barX = x + 340;
+  const barX = x + 320;
+  const barY = textBaseline - 4;
   const barWidth = 150;
   const barHeight = 8;
 
-  doc.rect(barX, y + 8, barWidth, barHeight).fillColor('#e5e7eb').fill();
+  doc.rect(barX, barY, barWidth, barHeight).fillColor('#e5e7eb').fill();
 
   const progressWidth = (score / 100) * barWidth;
-  const barColor = score < 33 ? '#ef4444' : score < 67 ? '#f59e0b' : '#10b981';
-  doc.rect(barX, y + 8, progressWidth, barHeight).fillColor(barColor).fill();
+  const barColor = getScoreColor(score);
+  doc.rect(barX, barY, progressWidth, barHeight).fillColor(barColor).fill();
 
-  doc.fontSize(14).fillColor('#111827').text(score.toString(), x + 510, y + 5, {
-    width: 30,
-    align: 'right'
-  });
+  doc.fontSize(14)
+    .fillColor('#111827')
+    .text(score.toString(), barX + barWidth + 10, textBaseline - 7, {
+      width: 30,
+      align: 'right'
+    });
 }
 
 function generateCategoryDetailPage(
@@ -269,7 +277,7 @@ async function generateCategoryDetailPageWithAI(
 
     if (categoryInsight && currentY < doc.page.height - 150) {
       currentY += 15;
-      doc.fontSize(12).fillColor('#1e40af').text('GPT-4.1 Analysis:', 50, currentY);
+      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', 50, currentY);
       currentY += 15;
       doc.fontSize(9).fillColor('#374151').text(categoryInsight, 50, currentY, {
         width: 500,
@@ -307,6 +315,24 @@ export async function generatePDFReport(
       const pageMargin = 50;
       let currentY = pageMargin;
 
+      let pageContentTracker = {
+        hasContent: false,
+        lastContentY: 50,
+        pageNumber: 1
+      };
+
+      const smartAddPage = () => {
+        if (pageContentTracker.hasContent) {
+          addFooter();
+          doc.addPage();
+          pageContentTracker.hasContent = false;
+          pageContentTracker.lastContentY = 50;
+          pageContentTracker.pageNumber++;
+          return 50;
+        }
+        return pageContentTracker.lastContentY;
+      };
+
       const addFooter = () => {
         const footerY = doc.page.height - pageMargin + 10;
         doc.fontSize(10).fillColor('#6b7280');
@@ -326,12 +352,20 @@ export async function generatePDFReport(
         );
       };
 
-      const checkAndAddPage = (requiredSpace: number) => {
-        if (currentY + requiredSpace > doc.page.height - pageMargin) {
-          addFooter();
-          doc.addPage();
-          currentY = pageMargin;
+      const checkAndAddPage = (requiredSpace: number): number => {
+        const availableSpace = doc.page.height - currentY - 60;
+
+        if (availableSpace < requiredSpace) {
+          if (pageContentTracker.hasContent) {
+            addFooter();
+            doc.addPage();
+            pageContentTracker.hasContent = false;
+            return 50;
+          }
         }
+
+        pageContentTracker.hasContent = true;
+        return currentY;
       };
 
       console.log('Generating AI insights with GPT-4.1...');
@@ -364,10 +398,9 @@ export async function generatePDFReport(
           day: 'numeric'
         })}`
       );
-      addFooter();
+      currentY = smartAddPage();
 
       // Overall Score Page with Gauge
-      doc.addPage();
       doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 50, 50, {
         align: 'center'
       });
@@ -377,10 +410,9 @@ export async function generatePDFReport(
       doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 50, 300, {
         align: 'center'
       });
-      addFooter();
+      currentY = smartAddPage();
 
       // AI Insights Page
-      doc.addPage();
       doc.fontSize(24).fillColor('#1e40af')
         .text('Executive Analysis & Strategic Insights', 50, 50);
 
@@ -393,31 +425,52 @@ export async function generatePDFReport(
 
       insightLines.forEach(line => {
         if (insightY > doc.page.height - 100) {
+          addFooter();
           doc.addPage();
           insightY = 50;
         }
 
-        if (line.includes('**') && line.includes('**')) {
-          currentSection = line.replace(/\*\*/g, '');
-          doc.fontSize(14).fillColor('#1e40af')
+        const cleanLine = line
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/^#+\s/, '')
+          .trim();
+
+        if (line.includes('**') && line.indexOf('**') === 0) {
+          currentSection = cleanLine;
+          doc.fontSize(14)
+            .fillColor('#1e40af')
             .text(currentSection, 50, insightY);
-          insightY += 20;
-        } else if (line.trim().startsWith('-') || /^\d+\./.test(line.trim())) {
-          doc.fontSize(10).fillColor('#374151')
-            .text(line.trim(), 60, insightY, { width: 480, lineGap: 3 });
+          insightY += 25;
+        } else if (cleanLine.match(/^[-•]\s/) || cleanLine.match(/^\d+\.\s/)) {
+          const bulletContent = cleanLine
+            .replace(/^[-•]\s/, '')
+            .replace(/^\d+\.\s/, '');
+          doc.fontSize(10)
+            .fillColor('#374151')
+            .text(`• ${bulletContent}`, 60, insightY, {
+              width: 480,
+              lineGap: 3,
+              continued: false
+            });
           insightY = doc.y + 8;
-        } else if (line.trim()) {
-          doc.fontSize(10).fillColor('#111827')
-            .text(line.trim(), 50, insightY, { width: 500, align: 'justify', lineGap: 4 });
-          insightY = doc.y + 10;
+        } else if (cleanLine) {
+          doc.fontSize(10)
+            .fillColor('#111827')
+            .text(cleanLine, 50, insightY, {
+              width: 500,
+              align: 'justify',
+              lineGap: 4,
+              continued: false
+            });
+          insightY = doc.y + 12;
         }
       });
-      addFooter();
+      currentY = smartAddPage();
 
       // Summary Page
       generateSummaryPage(doc, categoryScores);
-      addFooter();
-      doc.addPage();
+      currentY = smartAddPage();
       currentY = pageMargin;
       const barWidth = doc.page.width - pageMargin * 2;
 
@@ -440,8 +493,7 @@ export async function generatePDFReport(
           });
           currentY = doc.y + 15;
         }
-        addFooter();
-        doc.addPage();
+        currentY = smartAddPage();
         currentY = pageMargin;
       }
 
@@ -458,7 +510,7 @@ export async function generatePDFReport(
         currentY = doc.y + 5;
       }
 
-      addFooter();
+      currentY = smartAddPage();
 
       for (const category of coreDrivers) {
         if (categoryScores[category]) {
@@ -565,8 +617,8 @@ function getStrategicRecommendations(
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 67) return '#10b981';
-  if (score >= 34) return '#f59e0b';
+  if (score >= 80) return '#10b981';
+  if (score >= 60) return '#f59e0b';
   return '#ef4444';
 }
 
