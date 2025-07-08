@@ -29,6 +29,79 @@ export const supplementalDrivers = [
   'Strategic Assets & Intangibles'
 ];
 
+class PDFPageManager {
+  private hasContentOnCurrentPage = false;
+  private currentY = 50;
+
+  constructor(private doc: PDFKit.PDFDocument, private footerText: string) {}
+
+  addFooter() {
+    if (this.hasContentOnCurrentPage) {
+      const pageBottom = this.doc.page.height - 40;
+      this.doc.fontSize(8).fillColor('#6b7280');
+      this.doc.text(this.footerText, 30, pageBottom, {
+        width: this.doc.page.width - 60,
+        align: 'center'
+      });
+    }
+  }
+
+  newPage() {
+    if (this.hasContentOnCurrentPage) {
+      this.addFooter();
+      this.doc.addPage();
+      this.hasContentOnCurrentPage = false;
+      this.currentY = 50;
+    }
+  }
+
+  addContent(height: number) {
+    this.hasContentOnCurrentPage = true;
+    this.currentY += height;
+  }
+
+  getCurrentY() {
+    return this.currentY;
+  }
+
+  resetY() {
+    this.currentY = 50;
+  }
+}
+
+class PDFFlowManager {
+  private currentY = 50;
+  private readonly margins = { top: 50, bottom: 90 };
+
+  constructor(private doc: PDFKit.PDFDocument, private pageManager: PDFPageManager) {}
+
+  getCurrentY() {
+    return this.currentY;
+  }
+
+  canFit(requiredHeight: number): boolean {
+    return this.currentY + requiredHeight < this.doc.page.height - this.margins.bottom;
+  }
+
+  async addSection(requiredHeight: number, draw: (y: number) => void | Promise<void>) {
+    if (!this.canFit(requiredHeight)) {
+      this.pageManager.newPage();
+      this.currentY = this.margins.top;
+    }
+
+    await draw(this.currentY);
+    this.pageManager.addContent(requiredHeight);
+    this.currentY += requiredHeight;
+  }
+}
+
+function calculateCategoryHeight(score: CategoryScore): number {
+  let height = 230;
+  if (score.score < 80) height += 40;
+  if (score.score < 60) height += 80;
+  return height;
+}
+
 function drawScoreGauge(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -83,8 +156,12 @@ function drawScoreGauge(
   // Removed branding text inside gauge for a cleaner look
 }
 
-function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<string, CategoryScore>) {
-  let yPos = 40;
+function generateSummaryPage(
+  doc: PDFKit.PDFDocument,
+  categoryScores: Record<string, CategoryScore>,
+  startY: number
+) {
+  let yPos = startY;
   const ROW_HEIGHT = 22;
   const SECTION_GAP = 20;
 
@@ -138,12 +215,6 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
   supplementalDrivers.forEach((driverName) => {
     const score = categoryScores[driverName];
     if (!score) return;
-
-    // Check if we need a new page
-    if (yPos > doc.page.height - 100) {
-      doc.addPage();
-      yPos = 40;
-    }
 
     drawCategoryBar(doc, 30, yPos, driverName, score.score, 0, '');
     yPos += ROW_HEIGHT + 5;
@@ -263,12 +334,13 @@ function generateCategoryDetailPage(
   }
 }
 
-async function generateCategoryDetailPageWithAI(
+async function generateCategoryDetailSection(
   doc: PDFKit.PDFDocument,
   category: string,
   score: CategoryScore,
   isCore: boolean,
-  answers: Record<string, AssessmentAnswer>
+  answers: Record<string, AssessmentAnswer>,
+  startY: number
 ) {
   const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
   const details = (descriptions as Record<string, any>)[category];
@@ -277,14 +349,12 @@ async function generateCategoryDetailPageWithAI(
 
   const pageWidth = doc.page.width;
   const leftMargin = 30;
-  const rightMargin = 30;
-  const gaugeSize = 140;
-  const gaugeX = pageWidth - gaugeSize - rightMargin;
-  const textWidth = gaugeX - leftMargin - 20;
+  const maxX = doc.page.width - 50 - 200;
+  const gaugeX = Math.min(350, maxX);
+  const textWidth = gaugeX - 70;
+  drawScoreGauge(doc, gaugeX, startY, score.score);
 
-  drawScoreGauge(doc, gaugeX, 40, score.score);
-
-  let yPos = 40;
+  let yPos = startY;
 
   doc.fontSize(20).fillColor('#1e40af').text(details.title, leftMargin, yPos, {
     width: textWidth
@@ -390,64 +460,41 @@ export async function generatePDFReport(
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // CRITICAL: Track content on current page
-      let pageHasContent = false;
+      const footerText = `This report is confidential and proprietary to ${companyName || userName}`;
+      const pageManager = new PDFPageManager(doc, footerText);
+      const flowManager = new PDFFlowManager(doc, pageManager);
 
-      const addFooterToCurrentPage = () => {
-        const currentY = doc.y;
-        const pageBottom = doc.page.height - 25;
+      await flowManager.addSection(300, (y) => {
+        doc
+          .fillColor('#1e40af')
+          .fontSize(28)
+          .text('Value Builder Assessment Report', 30, y + 20, {
+            width: doc.page.width - 60,
+            align: 'center'
+          });
 
-        doc.fontSize(8).fillColor('#6b7280');
-        doc.text(
-          `This report is confidential and proprietary to ${companyName || userName}`,
-          30,
-          pageBottom,
-          { width: doc.page.width - 60, align: 'center' }
-        );
-
-        doc.y = currentY;
-      };
-
-      // Helper to add new page ONLY if current page has content
-      const smartNewPage = () => {
-        if (pageHasContent) {
-          addFooterToCurrentPage();
-          doc.addPage();
-          pageHasContent = false;
-        }
-      };
-
-      // Page 1: Title Page
-      doc.fillColor('#1e40af').fontSize(28).text('Value Builder Assessment Report', 30, 80, {
-        width: doc.page.width - 60,
-        align: 'center'
+        let base = y + 120;
+        doc.fillColor('black').fontSize(16);
+        doc.text(`Assessed By: ${userName}`, 30, base);
+        doc.text(`Email: ${userEmail}`, 30, base + 20);
+        doc.text(`Company: ${companyName || 'Not Specified'}`, 30, base + 40);
+        doc.text(`Industry: ${industry || 'Not Specified'}`, 30, base + 60);
+        doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, 30, base + 80);
       });
 
-      let yPos = 180;
-      doc.fillColor('black').fontSize(16);
-      doc.text(`Assessed By: ${userName}`, 30, yPos);
-      doc.text(`Email: ${userEmail}`, 30, yPos + 20);
-      doc.text(`Company: ${companyName || 'Not Specified'}`, 30, yPos + 40);
-      doc.text(`Industry: ${industry || 'Not Specified'}`, 30, yPos + 60);
-      doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, 30, yPos + 80);
+      await flowManager.addSection(400, (y) => {
+        doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 30, y, {
+          width: doc.page.width - 60,
+          align: 'center'
+        });
 
-      pageHasContent = true;
+        drawScoreGauge(doc, Math.min(doc.page.width / 2 - 150, doc.page.width - 250), y + 40, overallScore);
 
-      // Page 2: Score Page
-      smartNewPage();
-      doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 30, 40, {
-        width: doc.page.width - 60,
-        align: 'center'
+        doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 30, y + 240, {
+          width: doc.page.width - 60,
+          align: 'center'
+        });
       });
-
-      drawScoreGauge(doc, doc.page.width / 2 - 150, 80, overallScore);
-
-      doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 30, 280, {
-        width: doc.page.width - 60,
-        align: 'center'
-      });
-
-      pageHasContent = true;
 
       const aiInsights = await generateAIInsights(
         answers,
@@ -458,48 +505,47 @@ export async function generatePDFReport(
       );
 
       if (aiInsights && aiInsights.trim()) {
-        smartNewPage();
-        doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 30, 40);
-        doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 30, 70);
-
-        let aiY = 100;
         const lines = aiInsights.split('\n');
+        const estimatedHeight = 120 + lines.length * 12;
+        await flowManager.addSection(estimatedHeight, async (y) => {
+          doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 30, y);
+          doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 30, y + 30);
 
-        for (const line of lines) {
-          if (aiY > doc.page.height - 60) {
-            smartNewPage();
-            aiY = 40;
+          let aiY = y + 60;
+          for (const line of lines) {
+            if (aiY > doc.page.height - 60) {
+              pageManager.newPage();
+              aiY = pageManager.getCurrentY();
+            }
+
+            const cleanLine = line.replace(/\*\*/g, '').trim();
+
+            if (line.includes('**') && line.startsWith('**')) {
+              doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 30, aiY);
+              aiY += 20;
+            } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
+              const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
+              doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 40, aiY, {
+                width: doc.page.width - 80,
+                lineGap: 2
+              });
+              aiY = doc.y + 8;
+            } else if (cleanLine) {
+              doc.fontSize(10).fillColor('#111827').text(cleanLine, 30, aiY, {
+                width: doc.page.width - 60,
+                align: 'justify',
+                lineGap: 3
+              });
+              aiY = doc.y + 10;
+            }
           }
-
-          const cleanLine = line.replace(/\*\*/g, '').trim();
-
-          if (line.includes('**') && line.startsWith('**')) {
-            doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 30, aiY);
-            aiY += 20;
-          } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
-            const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
-            doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 40, aiY, {
-              width: doc.page.width - 80,
-              lineGap: 2
-            });
-            aiY = doc.y + 8;
-          } else if (cleanLine) {
-            doc.fontSize(10).fillColor('#111827').text(cleanLine, 30, aiY, {
-              width: doc.page.width - 60,
-              align: 'justify',
-              lineGap: 3
-            });
-            aiY = doc.y + 10;
-          }
-
-          pageHasContent = true;
-        }
+        });
       }
 
       if (Object.keys(categoryScores).length > 0) {
-        smartNewPage();
-        generateSummaryPage(doc, categoryScores);
-        pageHasContent = true;
+        await flowManager.addSection(300, (y) => {
+          generateSummaryPage(doc, categoryScores, y);
+        });
       }
 
       const areasForImprovement = Object.entries(categoryScores)
@@ -507,58 +553,52 @@ export async function generatePDFReport(
         .sort((a, b) => a[1].score - b[1].score);
 
       if (areasForImprovement.length > 0) {
-        smartNewPage();
-        yPos = 40;
+        const estHeight = 80 + areasForImprovement.length * 70;
+        await flowManager.addSection(estHeight, (y) => {
+          let yPos = y;
+          doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 30, yPos);
+          yPos += 30;
 
-        doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 30, yPos);
-        yPos += 30;
+          for (const [category, score] of areasForImprovement) {
+            if (yPos > doc.page.height - 100) {
+              pageManager.newPage();
+              yPos = pageManager.getCurrentY();
+            }
 
-        for (const [category, score] of areasForImprovement) {
-          if (yPos > doc.page.height - 100) {
-            smartNewPage();
-            yPos = 40;
+            doc
+              .fillColor('#ef4444')
+              .fontSize(14)
+              .text(`${category} (Current Score: ${score.score}/100)`, 30, yPos);
+            yPos += 18;
+
+            const recommendation = getImprovementRecommendation(category, score.score);
+            doc.fillColor('black').fontSize(10).text(recommendation, 30, yPos, {
+              width: doc.page.width - 60,
+              lineGap: 2
+            });
+            yPos = doc.y + 15;
           }
-
-          doc.fillColor('#ef4444').fontSize(14)
-             .text(`${category} (Current Score: ${score.score}/100)`, 30, yPos);
-          yPos += 18;
-
-          const recommendation = getImprovementRecommendation(category, score.score);
-          doc.fillColor('black').fontSize(10).text(recommendation, 30, yPos, {
-            width: doc.page.width - 60,
-            lineGap: 2
-          });
-          yPos = doc.y + 15;
-          pageHasContent = true;
-        }
+        });
       }
 
       const allCategories = [...coreDrivers, ...supplementalDrivers];
-
-      for (let i = 0; i < allCategories.length; i++) {
-        const category = allCategories[i];
-        if (categoryScores[category]) {
-          if (pageHasContent) {
-            addFooterToCurrentPage();
-            doc.addPage();
-          }
-
-          await generateCategoryDetailPageWithAI(
+      for (const category of allCategories) {
+        const score = categoryScores[category];
+        if (!score) continue;
+        const height = calculateCategoryHeight(score);
+        await flowManager.addSection(height, async (y) => {
+          await generateCategoryDetailSection(
             doc,
             category,
-            categoryScores[category],
+            score,
             coreDrivers.includes(category),
-            answers
+            answers,
+            y
           );
-
-          pageHasContent = true;
-        }
+        });
       }
 
-      if (pageHasContent) {
-        addFooterToCurrentPage();
-      }
-
+      pageManager.addFooter();
       doc.end();
     } catch (error) {
       reject(error);
