@@ -106,9 +106,29 @@ npm run db:push  # Push schema changes to database
 - **SMTP_USER**: Email authentication username
 - **SMTP_PASS**: Email authentication password
 
+## Terminal Commands
+
+### Safe Start/Stop Scripts
+- `./scripts/start.sh` - Automatically kills existing processes and starts fresh
+- `./scripts/stop.sh` - Safely stops the application
+- `./scripts/stop.sh && ./scripts/start.sh` - Restart command
+
+### Development Commands
+- `npm run dev` - Standard development start (may have port conflicts)
+- Port 5000 is used for the application
+
+## Troubleshooting
+
+### Port Conflict Resolution
+If "address already in use" error occurs:
+1. Run `./scripts/stop.sh` to kill existing processes
+2. Run `./scripts/start.sh` to start fresh
+3. Or use the restart command: `./scripts/stop.sh && ./scripts/start.sh`
+
 ## Changelog
 
 Changelog:
+- July 08, 2025. Added safe start/stop scripts to prevent port conflicts
 - July 07, 2025. Initial setup
 
 ## User Preferences
