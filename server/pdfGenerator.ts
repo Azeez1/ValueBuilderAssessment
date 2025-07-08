@@ -84,21 +84,18 @@ function drawScoreGauge(
 }
 
 function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<string, CategoryScore>) {
-  doc.addPage();
+  let yPos = 40;
+  const ROW_HEIGHT = 22;
+  const SECTION_GAP = 20;
 
-  // Start with fixed Y position
-  let yPos = 50;
-  const ROW_HEIGHT = 25;
-  const SECTION_GAP = 30;
-
-  doc.fontSize(24).fillColor('#1e40af').text('Performance Summary', 50, yPos, {
-    width: doc.page.width - 100,
+  doc.fontSize(22).fillColor('#1e40af').text('Performance Summary', 30, yPos, {
+    width: doc.page.width - 60,
     align: 'center'
   });
-  yPos += 50;
+  yPos += 40;
 
   // Part I heading
-  doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', 50, yPos);
+  doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', 30, yPos);
   yPos += SECTION_GAP;
 
   // Core drivers - NO EMOJIS
@@ -117,7 +114,7 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
     const score = categoryScores[driverName];
     if (!score) return;
 
-    drawCategoryBar(doc, 50, yPos, driverName, score.score, score.weight, '');
+    drawCategoryBar(doc, 30, yPos, driverName, score.score, score.weight, '');
     yPos += ROW_HEIGHT + 5; // Fixed increment
   });
 
@@ -125,7 +122,7 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
   yPos += SECTION_GAP;
 
   // Part II heading
-  doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', 50, yPos);
+  doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', 30, yPos);
   yPos += SECTION_GAP;
 
   // Supplemental drivers
@@ -145,10 +142,10 @@ function generateSummaryPage(doc: PDFKit.PDFDocument, categoryScores: Record<str
     // Check if we need a new page
     if (yPos > doc.page.height - 100) {
       doc.addPage();
-      yPos = 50;
+      yPos = 40;
     }
 
-    drawCategoryBar(doc, 50, yPos, driverName, score.score, 0, '');
+    drawCategoryBar(doc, 30, yPos, driverName, score.score, 0, '');
     yPos += ROW_HEIGHT + 5;
   });
 }
@@ -278,65 +275,66 @@ async function generateCategoryDetailPageWithAI(
 
   if (!details) return;
 
-  // Position gauge on the far right
   const pageWidth = doc.page.width;
-  const gaugeX = pageWidth - 280;
-  drawScoreGauge(doc, gaugeX, 50, score.score);
+  const leftMargin = 30;
+  const rightMargin = 30;
+  const gaugeSize = 140;
+  const gaugeX = pageWidth - gaugeSize - rightMargin;
+  const textWidth = gaugeX - leftMargin - 20;
 
-  // Constrain text width to avoid gauge overlap
-  const textMaxWidth = gaugeX - 100;
+  drawScoreGauge(doc, gaugeX, 40, score.score);
 
-  // Title
-  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, {
-    width: textMaxWidth
+  let yPos = 40;
+
+  doc.fontSize(20).fillColor('#1e40af').text(details.title, leftMargin, yPos, {
+    width: textWidth
   });
+  yPos = doc.y + 5;
 
-  // Subtitle
-  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, 50, 80, {
-    width: textMaxWidth,
-    lineGap: 3
+  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, leftMargin, yPos, {
+    width: textWidth,
+    lineGap: 2
   });
+  yPos = doc.y + 10;
 
-  // Score display
-  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 50, 120, {
-    width: 100,
+  doc.fontSize(40).fillColor(getScoreColor(score.score)).text(`${score.score}`, leftMargin, yPos, {
+    width: 80,
     align: 'center'
   });
-  doc.fontSize(16).fillColor('#6b7280').text('/100', 150, 135);
+  doc.fontSize(14).fillColor('#6b7280').text('/100', leftMargin + 90, yPos + 12);
+  yPos += 50;
 
-  // Main description
   doc
     .fontSize(11)
     .fillColor('#111827')
-    .text(details.description, 50, 200, {
-      width: textMaxWidth,
+    .text(details.description, leftMargin, yPos, {
+      width: textWidth,
       align: 'justify',
-      lineGap: 4
-    });
-
-  let currentY = doc.y + 20;
-
-  // Key Assessment Areas
-  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, currentY);
-  currentY += 20;
-  details.insights.forEach((insight: string) => {
-    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, 70, currentY, {
-      width: textMaxWidth - 20,
       lineGap: 3
     });
-    currentY = doc.y + 8;
+
+  let currentY = doc.y + 15;
+
+  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', leftMargin, currentY);
+  currentY += 18;
+  details.insights.forEach((insight: string) => {
+    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, leftMargin + 20, currentY, {
+      width: textWidth - 20,
+      lineGap: 2
+    });
+    currentY = doc.y + 6;
   });
 
   if (score.score < 60) {
-    currentY += 15;
-    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, currentY);
+    currentY += 12;
+    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', leftMargin, currentY);
 
-    currentY += 15;
+    currentY += 12;
     const recommendations = getImprovementRecommendation(category, score.score);
-    doc.fontSize(10).fillColor('#374151').text(recommendations, 50, currentY, {
-      width: textMaxWidth,
+    doc.fontSize(10).fillColor('#374151').text(recommendations, leftMargin, currentY, {
+      width: textWidth,
       align: 'justify',
-      lineGap: 4
+      lineGap: 3
     });
   }
 
@@ -359,10 +357,10 @@ async function generateCategoryDetailPageWithAI(
 
     if (categoryInsight && currentY < doc.page.height - 150) {
       currentY += 15;
-      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', 50, currentY);
+      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', leftMargin, currentY);
       currentY += 15;
-      doc.fontSize(9).fillColor('#374151').text(categoryInsight, 50, currentY, {
-        width: textMaxWidth,
+      doc.fontSize(9).fillColor('#374151').text(categoryInsight, leftMargin, currentY, {
+        width: textWidth,
         align: 'justify',
         lineGap: 3
       });
@@ -381,70 +379,76 @@ export async function generatePDFReport(
 ): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 30,
+        bufferPages: true
+      });
       const buffers: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // Helper to add footer to current page only
+      // CRITICAL: Track content on current page
+      let pageHasContent = false;
+
       const addFooterToCurrentPage = () => {
-        const pageBottom = doc.page.height - 40;
+        const currentY = doc.y;
+        const pageBottom = doc.page.height - 25;
+
         doc.fontSize(8).fillColor('#6b7280');
         doc.text(
           `This report is confidential and proprietary to ${companyName || userName}`,
-          50,
+          30,
           pageBottom,
-          { width: doc.page.width - 100, align: 'center' }
+          { width: doc.page.width - 60, align: 'center' }
         );
-        doc.text(
-          `Generated by Value Builder Assessment™ | ${new Date().toISOString().split('T')[0]}`,
-          50,
-          pageBottom + 10,
-          { width: doc.page.width - 100, align: 'center' }
-        );
-        doc.text(
-          'For questions, contact: aoseni@duxvitaecapital.com',
-          50,
-          pageBottom + 20,
-          { width: doc.page.width - 100, align: 'center' }
-        );
+
+        doc.y = currentY;
       };
 
-      // Title Page
-      doc.fillColor('#1e40af').fontSize(28).text('Value Builder Assessment Report', 50, 100, {
-        width: doc.page.width - 100,
+      // Helper to add new page ONLY if current page has content
+      const smartNewPage = () => {
+        if (pageHasContent) {
+          addFooterToCurrentPage();
+          doc.addPage();
+          pageHasContent = false;
+        }
+      };
+
+      // Page 1: Title Page
+      doc.fillColor('#1e40af').fontSize(28).text('Value Builder Assessment Report', 30, 80, {
+        width: doc.page.width - 60,
         align: 'center'
       });
 
-      let yPos = 200;
+      let yPos = 180;
       doc.fillColor('black').fontSize(16);
-      doc.text(`Assessed By: ${userName}`, 50, yPos);
-      doc.text(`Email: ${userEmail}`, 50, yPos + 25);
-      doc.text(`Company: ${companyName || 'Not Specified'}`, 50, yPos + 50);
-      doc.text(`Industry: ${industry || 'Not Specified'}`, 50, yPos + 75);
-      doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, 50, yPos + 100);
+      doc.text(`Assessed By: ${userName}`, 30, yPos);
+      doc.text(`Email: ${userEmail}`, 30, yPos + 20);
+      doc.text(`Company: ${companyName || 'Not Specified'}`, 30, yPos + 40);
+      doc.text(`Industry: ${industry || 'Not Specified'}`, 30, yPos + 60);
+      doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, 30, yPos + 80);
 
-      addFooterToCurrentPage();
+      pageHasContent = true;
 
-      // Score Page - NO EMPTY PAGE BEFORE THIS
-      doc.addPage();
-      doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 50, 50, {
-        width: doc.page.width - 100,
+      // Page 2: Score Page
+      smartNewPage();
+      doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 30, 40, {
+        width: doc.page.width - 60,
         align: 'center'
       });
 
-      drawScoreGauge(doc, doc.page.width / 2 - 150, 100, overallScore);
+      drawScoreGauge(doc, doc.page.width / 2 - 150, 80, overallScore);
 
-      doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 50, 300, {
-        width: doc.page.width - 100,
+      doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 30, 280, {
+        width: doc.page.width - 60,
         align: 'center'
       });
 
-      addFooterToCurrentPage();
+      pageHasContent = true;
 
-      // AI Insights - NO EMPTY PAGE
       const aiInsights = await generateAIInsights(
         answers,
         categoryScores,
@@ -453,122 +457,91 @@ export async function generatePDFReport(
         industry
       );
 
-      doc.addPage();
-      doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 50, 50);
-      doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 50, 80);
+      if (aiInsights && aiInsights.trim()) {
+        smartNewPage();
+        doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 30, 40);
+        doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 30, 70);
 
-      // Parse AI insights properly
-      let aiY = 110;
-      const lines = aiInsights.split('\n');
+        let aiY = 100;
+        const lines = aiInsights.split('\n');
 
-      for (const line of lines) {
-        if (aiY > doc.page.height - 80) {
-          addFooterToCurrentPage();
-          doc.addPage();
-          aiY = 50;
-        }
+        for (const line of lines) {
+          if (aiY > doc.page.height - 60) {
+            smartNewPage();
+            aiY = 40;
+          }
 
-        const cleanLine = line.replace(/\*\*/g, '').trim();
+          const cleanLine = line.replace(/\*\*/g, '').trim();
 
-        if (line.includes('**') && line.startsWith('**')) {
-          // Section header
-          doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 50, aiY);
-          aiY += 25;
-        } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
-          // Bullet or numbered item
-          const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
-          doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 60, aiY, {
-            width: doc.page.width - 120,
-            lineGap: 3
-          });
-          aiY = doc.y + 10;
-        } else if (cleanLine) {
-          // Regular paragraph
-          doc.fontSize(10).fillColor('#111827').text(cleanLine, 50, aiY, {
-            width: doc.page.width - 100,
-            align: 'justify',
-            lineGap: 4
-          });
-          aiY = doc.y + 12;
+          if (line.includes('**') && line.startsWith('**')) {
+            doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 30, aiY);
+            aiY += 20;
+          } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
+            const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
+            doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 40, aiY, {
+              width: doc.page.width - 80,
+              lineGap: 2
+            });
+            aiY = doc.y + 8;
+          } else if (cleanLine) {
+            doc.fontSize(10).fillColor('#111827').text(cleanLine, 30, aiY, {
+              width: doc.page.width - 60,
+              align: 'justify',
+              lineGap: 3
+            });
+            aiY = doc.y + 10;
+          }
+
+          pageHasContent = true;
         }
       }
 
-      addFooterToCurrentPage();
+      if (Object.keys(categoryScores).length > 0) {
+        smartNewPage();
+        generateSummaryPage(doc, categoryScores);
+        pageHasContent = true;
+      }
 
-      // Summary page
-      generateSummaryPage(doc, categoryScores);
-      addFooterToCurrentPage();
-
-      // Priority Areas - Only if needed
       const areasForImprovement = Object.entries(categoryScores)
         .filter(([_, s]) => s.score < 60)
         .sort((a, b) => a[1].score - b[1].score);
 
       if (areasForImprovement.length > 0) {
-        doc.addPage();
-        yPos = 50;
+        smartNewPage();
+        yPos = 40;
 
-        doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 50, yPos);
-        yPos += 35;
+        doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 30, yPos);
+        yPos += 30;
 
         for (const [category, score] of areasForImprovement) {
-          if (yPos > doc.page.height - 120) {
-            addFooterToCurrentPage();
-            doc.addPage();
-            yPos = 50;
+          if (yPos > doc.page.height - 100) {
+            smartNewPage();
+            yPos = 40;
           }
 
           doc.fillColor('#ef4444').fontSize(14)
-            .text(`${category} (Current Score: ${score.score}/100)`, 50, yPos);
-          yPos += 20;
+             .text(`${category} (Current Score: ${score.score}/100)`, 30, yPos);
+          yPos += 18;
 
           const recommendation = getImprovementRecommendation(category, score.score);
-          doc.fillColor('black').fontSize(11).text(recommendation, 50, yPos, {
-            width: doc.page.width - 100,
-            lineGap: 3
+          doc.fillColor('black').fontSize(10).text(recommendation, 30, yPos, {
+            width: doc.page.width - 60,
+            lineGap: 2
           });
-          yPos = doc.y + 20;
+          yPos = doc.y + 15;
+          pageHasContent = true;
         }
-
-        addFooterToCurrentPage();
       }
 
-      // Strategic Recommendations
-      const strategicRecs = getStrategicRecommendations(overallScore, categoryScores);
-      if (strategicRecs.length > 0) {
-        doc.addPage();
-        yPos = 50;
-
-        doc.fillColor('#1e40af').fontSize(20).text('Strategic Recommendations', 50, yPos);
-        yPos += 35;
-
-        for (const rec of strategicRecs) {
-          if (yPos > doc.page.height - 80) {
-            addFooterToCurrentPage();
-            doc.addPage();
-            yPos = 50;
-          }
-
-          doc.fontSize(11).fillColor('black').text(`• ${rec}`, 50, yPos, {
-            width: doc.page.width - 100,
-            lineGap: 3
-          });
-          yPos = doc.y + 10;
-        }
-
-        addFooterToCurrentPage();
-      }
-
-      // Category detail pages - combine consecutively without blank pages
-      let categoriesProcessed = 0;
       const allCategories = [...coreDrivers, ...supplementalDrivers];
 
-      for (const category of allCategories) {
+      for (let i = 0; i < allCategories.length; i++) {
+        const category = allCategories[i];
         if (categoryScores[category]) {
-          if (categoriesProcessed > 0) {
+          if (pageHasContent) {
             addFooterToCurrentPage();
+            doc.addPage();
           }
-          doc.addPage();
 
           await generateCategoryDetailPageWithAI(
             doc,
@@ -578,11 +551,11 @@ export async function generatePDFReport(
             answers
           );
 
-          categoriesProcessed++;
+          pageHasContent = true;
         }
       }
 
-      if (categoriesProcessed > 0) {
+      if (pageHasContent) {
         addFooterToCurrentPage();
       }
 
