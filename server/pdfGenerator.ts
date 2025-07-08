@@ -5,6 +5,8 @@ import {
   coreDriverDescriptions,
   supplementalDriverDescriptions
 } from './reportTemplates';
+import { generateAIInsights, generateCategoryInsight } from './openaiService';
+import { questions } from '../client/src/data/questions';
 
 // Driver categories used throughout the report
 export const coreDrivers = [
@@ -237,6 +239,47 @@ function generateCategoryDetailPage(
   }
 }
 
+async function generateCategoryDetailPageWithAI(
+  doc: PDFKit.PDFDocument,
+  category: string,
+  score: CategoryScore,
+  isCore: boolean,
+  answers: Record<string, AssessmentAnswer>
+) {
+  generateCategoryDetailPage(doc, category, score, isCore);
+
+  let currentY = doc.y;
+
+  if (score.score < 80) {
+    const categoryAnswers = Object.entries(answers)
+      .filter(([questionId]) => {
+        const question = questions.find(q => q.id === questionId);
+        return question?.section === category;
+      })
+      .map(([questionId, answer]) => ({
+        question: questions.find(q => q.id === questionId)!,
+        answer
+      }));
+
+    const categoryInsight = await generateCategoryInsight(
+      category,
+      score.score,
+      categoryAnswers
+    );
+
+    if (categoryInsight && currentY < doc.page.height - 150) {
+      currentY += 15;
+      doc.fontSize(12).fillColor('#1e40af').text('GPT-4.1 Analysis:', 50, currentY);
+      currentY += 15;
+      doc.fontSize(9).fillColor('#374151').text(categoryInsight, 50, currentY, {
+        width: 500,
+        align: 'justify',
+        lineGap: 3
+      });
+    }
+  }
+}
+
 export async function generatePDFReport(
   userName: string,
   userEmail: string,
@@ -246,7 +289,7 @@ export async function generatePDFReport(
   categoryScores: Record<string, CategoryScore>,
   answers: Record<string, AssessmentAnswer>
 ): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
       const buffers: Buffer[] = [];
@@ -291,6 +334,15 @@ export async function generatePDFReport(
         }
       };
 
+      console.log('Generating AI insights with GPT-4.1...');
+      const aiInsights = await generateAIInsights(
+        answers,
+        categoryScores,
+        overallScore,
+        companyName,
+        industry
+      );
+
       // Title Page
       doc.fillColor('#1e40af').fontSize(28).text('Value Builder Assessment Report', {
         align: 'center'
@@ -324,6 +376,41 @@ export async function generatePDFReport(
 
       doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 50, 300, {
         align: 'center'
+      });
+      addFooter();
+
+      // AI Insights Page
+      doc.addPage();
+      doc.fontSize(24).fillColor('#1e40af')
+        .text('Executive Analysis & Strategic Insights', 50, 50);
+
+      doc.fontSize(10).fillColor('#6b7280')
+        .text('Powered by GPT-4.1 AI Analysis', 50, 80);
+
+      const insightLines = aiInsights.split('\n');
+      let insightY = 110;
+      let currentSection = '';
+
+      insightLines.forEach(line => {
+        if (insightY > doc.page.height - 100) {
+          doc.addPage();
+          insightY = 50;
+        }
+
+        if (line.includes('**') && line.includes('**')) {
+          currentSection = line.replace(/\*\*/g, '');
+          doc.fontSize(14).fillColor('#1e40af')
+            .text(currentSection, 50, insightY);
+          insightY += 20;
+        } else if (line.trim().startsWith('-') || /^\d+\./.test(line.trim())) {
+          doc.fontSize(10).fillColor('#374151')
+            .text(line.trim(), 60, insightY, { width: 480, lineGap: 3 });
+          insightY = doc.y + 8;
+        } else if (line.trim()) {
+          doc.fontSize(10).fillColor('#111827')
+            .text(line.trim(), 50, insightY, { width: 500, align: 'justify', lineGap: 4 });
+          insightY = doc.y + 10;
+        }
       });
       addFooter();
 
@@ -375,14 +462,26 @@ export async function generatePDFReport(
 
       for (const category of coreDrivers) {
         if (categoryScores[category]) {
-          generateCategoryDetailPage(doc, category, categoryScores[category], true);
+          await generateCategoryDetailPageWithAI(
+            doc,
+            category,
+            categoryScores[category],
+            true,
+            answers
+          );
           addFooter();
         }
       }
 
       for (const category of supplementalDrivers) {
         if (categoryScores[category]) {
-          generateCategoryDetailPage(doc, category, categoryScores[category], false);
+          await generateCategoryDetailPageWithAI(
+            doc,
+            category,
+            categoryScores[category],
+            false,
+            answers
+          );
           addFooter();
         }
       }
