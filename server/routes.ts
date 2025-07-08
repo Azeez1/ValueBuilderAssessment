@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, AssessmentAnswer } from "@shared/schema";
+import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, AssessmentAnswer, CategoryScore } from "@shared/schema";
 import { generatePDFReport } from "./pdfGenerator";
 import { z } from "zod";
 import nodemailer from "nodemailer";
@@ -167,74 +167,57 @@ async function sendResultEmail(resultData: any) {
   );
   console.log('PDF generated successfully');
 
+  const categoriesArray = Object.entries(categoryBreakdown) as [string, CategoryScore][];
+  const topPerforming = [...categoriesArray]
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, 3)
+    .map(([name]) => name);
+  const needsImprovement = [...categoriesArray]
+    .sort((a, b) => a[1].score - b[1].score)
+    .slice(0, 3)
+    .map(([name]) => name);
+
   const emailContent = `
-      <h2>Value Builder Assessment Completed</h2>
+      <h2>Dux Vitae Capital - Value Builder Assessment Completed</h2>
       <p>Dear ${userName},</p>
-      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached to this email.</p>
-      <p><strong>Your Overall Score: ${overallScore}/100</strong></p>
-      <p>The attached PDF contains:</p>
-      <ul>
-        <li>Detailed breakdown of all 14 assessment categories</li>
-        <li>Priority areas for improvement</li>
-        <li>Strategic recommendations</li>
-        <li>Performance analysis</li>
-      </ul>
-      <p>Best regards,<br>Value Builder Assessment Team</p>
+      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached.</p>
+      <p><strong>Overall Score: ${overallScore}/100</strong></p>
+      <p><strong>Top Strengths:</strong> ${topPerforming.join(', ')}</p>
+      <p><strong>Improvement Priorities:</strong> ${needsImprovement.join(', ')}</p>
+      <p>The attached PDF includes detailed insights for all 14 drivers.</p>
+      <p>Best regards,<br>Dux Vitae Capital Team</p>
     `;
 
-  // Add SMTP verification first
-  try {
-<<<<<<codex/add-pdf-report-generation-to-assessment-results
-    const mailOptions = {
-      from: `"Value Builder Assessment" <${process.env.SMTP_USER?.trim()}>`,
-      attachments: [{
-        filename: `ValueBuilder_Report_${userName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
-        content: pdfBuffer
-      }]
-    };
+  const attachmentName = `DuxVitae_ValueBuilder_Report_${(companyName || userName).replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
 
-    const userMailInfo = await transporter.sendMail({
-      ...mailOptions,
-=======
+  try {
     await transporter.verify();
     console.log('SMTP connection verified successfully');
-  } catch (error: any) {
-    console.error('SMTP verification failed:', error.message);
-    return 'failed';
-  }
 
-  try {
-    // Send to user
+    const mailOptions = {
+      from: `"Dux Vitae Capital" <${smtpUser}>`,
+      attachments: [{ filename: attachmentName, content: pdfBuffer }],
+    };
+
     console.log('Sending email to user:', userEmail);
     const userMailInfo = await transporter.sendMail({
-      from: `"Value Builder Assessment" <${smtpUser}>`,
->>>>>> main
+      ...mailOptions,
       to: userEmail,
       subject: 'Your Value Builder Assessment Report',
-      html: emailContent
+      html: emailContent,
     });
     console.log('Report sent to user', userMailInfo.messageId);
 
-<<<<<< codex/add-pdf-report-generation-to-assessment-results
-    const adminMailInfo = await transporter.sendMail({
-      ...mailOptions,
-      to: 'aoseni@duxvitaecapital.com',
-      subject: `New Assessment: ${userName} (${companyName}) - Score: ${overallScore}`,
-      html: emailContent + `<p>User Email: ${userEmail}</p>`
-=======
-    // Send to admin
     console.log('Sending email to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
-      from: `"Value Builder Assessment" <${smtpUser}>`,
+      ...mailOptions,
       to: smtpUser,
-      subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
-      html: emailContent,
->>>>> main
+      subject: `New Assessment: ${userName} - Score ${overallScore}/100`,
+      html: emailContent + `<p>User Email: ${userEmail}</p>`,
     });
     console.log('Report sent to admin', adminMailInfo.messageId);
 
     return 'success';
-
   } catch (error: any) {
     console.error('Email sending failed:', error.message);
     if (error.code) console.error('Error code:', error.code);
