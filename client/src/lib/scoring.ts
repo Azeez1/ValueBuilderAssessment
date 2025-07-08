@@ -23,12 +23,13 @@ export function calculateCategoryScores(answers: Record<string, AssessmentAnswer
       const answer = answers[question.id];
       if (answer) {
         totalScore += answer.points * (question.weight || 1);
+        maxScore += 100 * (question.weight || 1);
         answeredQuestions++;
       }
-      maxScore += 100 * (question.weight || 1);
     });
 
     // Normalize score to 0-100 range
+    // Only calculate score based on answered questions
     const normalizedScore = answeredQuestions > 0 ? (totalScore / maxScore) * 100 : 0;
 
     categoryScores[section] = {

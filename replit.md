@@ -128,6 +128,7 @@ If "address already in use" error occurs:
 ## Changelog
 
 Changelog:
+- July 08, 2025. Fixed scoring logic for incomplete sections - now calculates based on answered questions only instead of defaulting to low scores
 - July 08, 2025. Added safe start/stop scripts to prevent port conflicts
 - July 07, 2025. Initial setup
 
