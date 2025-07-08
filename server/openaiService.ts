@@ -2,9 +2,8 @@ import OpenAI from 'openai';
 import { AssessmentAnswer, CategoryScore } from '@shared/schema';
 import { questions } from '../client/src/data/questions';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 const AI_MODEL = 'gpt-4.1';
 
@@ -15,6 +14,9 @@ export async function generateAIInsights(
   companyName?: string,
   industry?: string
 ): Promise<string> {
+  if (!openai) {
+    return '';
+  }
   try {
     const answerContext = buildAnswerContext(answers);
     const prompt = `
@@ -112,6 +114,9 @@ export async function generateCategoryInsight(
   score: number,
   categoryAnswers: Array<{ question: any; answer: AssessmentAnswer }>
 ): Promise<string> {
+  if (!openai) {
+    return '';
+  }
   const prompt = `
 Analyze this specific category from a Value Builder Assessment:
 

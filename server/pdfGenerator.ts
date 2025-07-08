@@ -8,6 +8,12 @@ import {
 import { generateAIInsights, generateCategoryInsight } from './openaiService';
 import { questions } from '../client/src/data/questions';
 
+function pageIsEmpty(doc: PDFKit.PDFDocument): boolean {
+  return doc.y <= (doc.page.margins?.top ?? 0);
+}
+
+const MAX_AI_LINES = 150;
+
 // Driver categories used throughout the report
 export const coreDrivers = [
   'Financial Performance',
@@ -453,47 +459,52 @@ export async function generatePDFReport(
         industry
       );
 
-      doc.addPage();
-      doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 50, 50);
-      doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 50, 80);
-
-      // Parse AI insights properly
-      let aiY = 110;
-      const lines = aiInsights.split('\n');
-
-      for (const line of lines) {
-        if (aiY > doc.page.height - 80) {
+      if (aiInsights.trim()) {
+        if (!pageIsEmpty(doc)) {
           addFooterToCurrentPage();
           doc.addPage();
-          aiY = 50;
+        }
+        doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 50, 50);
+        doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 50, 80);
+
+        // Parse AI insights properly
+        let aiY = 110;
+        const lines = aiInsights.split('\n').slice(0, MAX_AI_LINES);
+
+        for (const line of lines) {
+          if (aiY > doc.page.height - 80) {
+            addFooterToCurrentPage();
+            doc.addPage();
+            aiY = 50;
+          }
+
+          const cleanLine = line.replace(/\*\*/g, '').trim();
+
+          if (line.includes('**') && line.startsWith('**')) {
+            // Section header
+            doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 50, aiY);
+            aiY += 25;
+          } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
+            // Bullet or numbered item
+            const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
+            doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 60, aiY, {
+              width: doc.page.width - 120,
+              lineGap: 3
+            });
+            aiY = doc.y + 10;
+          } else if (cleanLine) {
+            // Regular paragraph
+            doc.fontSize(10).fillColor('#111827').text(cleanLine, 50, aiY, {
+              width: doc.page.width - 100,
+              align: 'justify',
+              lineGap: 4
+            });
+            aiY = doc.y + 12;
+          }
         }
 
-        const cleanLine = line.replace(/\*\*/g, '').trim();
-
-        if (line.includes('**') && line.startsWith('**')) {
-          // Section header
-          doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 50, aiY);
-          aiY += 25;
-        } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
-          // Bullet or numbered item
-          const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
-          doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 60, aiY, {
-            width: doc.page.width - 120,
-            lineGap: 3
-          });
-          aiY = doc.y + 10;
-        } else if (cleanLine) {
-          // Regular paragraph
-          doc.fontSize(10).fillColor('#111827').text(cleanLine, 50, aiY, {
-            width: doc.page.width - 100,
-            align: 'justify',
-            lineGap: 4
-          });
-          aiY = doc.y + 12;
-        }
+        addFooterToCurrentPage();
       }
-
-      addFooterToCurrentPage();
 
       // Summary page
       generateSummaryPage(doc, categoryScores);
@@ -505,7 +516,10 @@ export async function generatePDFReport(
         .sort((a, b) => a[1].score - b[1].score);
 
       if (areasForImprovement.length > 0) {
-        doc.addPage();
+        if (!pageIsEmpty(doc)) {
+          addFooterToCurrentPage();
+          doc.addPage();
+        }
         yPos = 50;
 
         doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 50, yPos);
@@ -536,7 +550,10 @@ export async function generatePDFReport(
       // Strategic Recommendations
       const strategicRecs = getStrategicRecommendations(overallScore, categoryScores);
       if (strategicRecs.length > 0) {
-        doc.addPage();
+        if (!pageIsEmpty(doc)) {
+          addFooterToCurrentPage();
+          doc.addPage();
+        }
         yPos = 50;
 
         doc.fillColor('#1e40af').fontSize(20).text('Strategic Recommendations', 50, yPos);
@@ -568,7 +585,9 @@ export async function generatePDFReport(
           if (categoriesProcessed > 0) {
             addFooterToCurrentPage();
           }
-          doc.addPage();
+          if (!pageIsEmpty(doc)) {
+            doc.addPage();
+          }
 
           await generateCategoryDetailPageWithAI(
             doc,
