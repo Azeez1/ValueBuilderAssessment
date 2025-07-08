@@ -1,29 +1,30 @@
-import { pgTable, text, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { sqliteTable, text, integer, blob } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
-export const assessments = pgTable("assessments", {
-  id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull(),
-  answers: jsonb("answers").notNull(),
-  currentQuestion: integer("current_question").default(0),
-  completed: integer("completed").default(0), // 0 = in progress, 1 = completed
-  totalScore: integer("total_score"),
-  categoryScores: jsonb("category_scores"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+export const assessments = sqliteTable('assessments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id').notNull().unique(),
+  answers: blob('answers', { mode: 'json' }).$type<Record<string, AssessmentAnswer>>().notNull(),
+  currentQuestion: integer('current_question').default(0),
+  completed: integer('completed').default(0),
+  totalScore: integer('total_score'),
+  categoryScores: blob('category_scores', { mode: 'json' }).$type<Record<string, CategoryScore>>(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s','now'))`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s','now'))`),
 });
 
-export const results = pgTable("results", {
-  id: serial("id").primaryKey(),
-  assessmentId: integer("assessment_id").notNull(),
-  userName: text("user_name").notNull(),
-  userEmail: text("user_email").notNull(),
-  companyName: text("company_name"),
-  industry: text("industry"),
-  overallScore: integer("overall_score").notNull(),
-  categoryBreakdown: jsonb("category_breakdown").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+export const results = sqliteTable('results', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  assessmentId: integer('assessment_id').notNull(),
+  userName: text('user_name').notNull(),
+  userEmail: text('user_email').notNull(),
+  companyName: text('company_name'),
+  industry: text('industry'),
+  overallScore: integer('overall_score').notNull(),
+  categoryBreakdown: blob('category_breakdown', { mode: 'json' }).$type<Record<string, CategoryScore>>().notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s','now'))`),
 });
 
 export const insertAssessmentSchema = createInsertSchema(assessments).omit({
