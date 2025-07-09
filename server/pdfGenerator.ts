@@ -30,13 +30,16 @@ export const supplementalDrivers = [
 ];
 
 class PDFPageManager {
-  private hasContentOnCurrentPage = false;
-  private currentY = 50;
+  private hasContent = false;
 
   constructor(private doc: PDFKit.PDFDocument, private footerText: string) {}
 
+  markContentAdded() {
+    this.hasContent = true;
+  }
+
   addFooter() {
-    if (this.hasContentOnCurrentPage) {
+    if (this.hasContent) {
       const pageBottom = this.doc.page.height - 40;
       this.doc.fontSize(8).fillColor('#6b7280');
       this.doc.text(this.footerText, 30, pageBottom, {
@@ -47,51 +50,46 @@ class PDFPageManager {
   }
 
   newPage() {
-    if (this.hasContentOnCurrentPage) {
+    if (this.hasContent) {
       this.addFooter();
       this.doc.addPage();
-      this.hasContentOnCurrentPage = false;
-      this.currentY = 50;
+      this.hasContent = false;
     }
-  }
-
-  addContent(height: number) {
-    this.hasContentOnCurrentPage = true;
-    this.currentY += height;
-  }
-
-  getCurrentY() {
-    return this.currentY;
-  }
-
-  resetY() {
-    this.currentY = 50;
   }
 }
 
 class PDFFlowManager {
   private currentY = 50;
-  private readonly margins = { top: 50, bottom: 90 };
+  private readonly margins = { top: 50, bottom: 90, left: 30, right: 50 };
 
   constructor(private doc: PDFKit.PDFDocument, private pageManager: PDFPageManager) {}
 
-  getCurrentY() {
-    return this.currentY;
+  private pageHeight() {
+    return this.doc.page.height;
   }
 
   canFit(requiredHeight: number): boolean {
-    return this.currentY + requiredHeight < this.doc.page.height - this.margins.bottom;
+    return this.currentY + requiredHeight < this.pageHeight() - this.margins.bottom;
   }
 
-  async addSection(requiredHeight: number, draw: (y: number) => void | Promise<void>) {
-    if (!this.canFit(requiredHeight)) {
+  async addContent(
+    estimatedHeight: number,
+    drawFn: (doc: PDFKit.PDFDocument, x: number, y: number, maxWidth: number) => Promise<number>
+  ) {
+    if (!this.canFit(estimatedHeight)) {
       this.pageManager.newPage();
       this.currentY = this.margins.top;
     }
 
-    await draw(this.currentY);
-    this.pageManager.addContent(requiredHeight);
-    this.currentY += requiredHeight;
+    const actualHeight = await drawFn(
+      this.doc,
+      this.margins.left,
+      this.currentY,
+      this.doc.page.width - this.margins.left - this.margins.right
+    );
+
+    this.currentY += actualHeight;
+    this.pageManager.markContentAdded();
   }
 }
 
@@ -106,10 +104,15 @@ function drawScoreGauge(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
-  score: number
-) {
-  const centerX = x + 150;
-  const centerY = y + 100;
+  score: number,
+  maxWidth: number
+): number {
+  const gaugeWidth = 200;
+  const gaugeHeight = 200;
+  const actualX = Math.min(x, doc.page.width - 50 - gaugeWidth);
+
+  const centerX = actualX + gaugeWidth / 2;
+  const centerY = y + gaugeHeight / 2;
   const radius = 80;
 
   const segments = [
@@ -152,73 +155,48 @@ function drawScoreGauge(
     .fillColor(getScoreColor(score))
     .text(score.toString(), centerX - 30, centerY + 20, { width: 60, align: 'center' });
 
-
   // Removed branding text inside gauge for a cleaner look
+  return gaugeHeight;
 }
 
-function generateSummaryPage(
+async function generateSummaryPage(
   doc: PDFKit.PDFDocument,
-  categoryScores: Record<string, CategoryScore>,
-  startY: number
-) {
-  let yPos = startY;
+  x: number,
+  y: number,
+  maxWidth: number,
+  categoryScores: Record<string, CategoryScore>
+): Promise<number> {
+  const startY = y;
+  let currentY = y;
   const ROW_HEIGHT = 22;
-  const SECTION_GAP = 20;
 
-  doc.fontSize(22).fillColor('#1e40af').text('Performance Summary', 30, yPos, {
-    width: doc.page.width - 60,
+  doc.fontSize(22).fillColor('#1e40af').text('Performance Summary', x, currentY, {
+    width: maxWidth,
     align: 'center'
   });
-  yPos += 40;
+  currentY = doc.y + 20;
 
-  // Part I heading
-  doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', 30, yPos);
-  yPos += SECTION_GAP;
+  doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', x, currentY);
+  currentY = doc.y + 10;
 
-  // Core drivers - NO EMOJIS
-  const coreDrivers = [
-    'Financial Performance',
-    'Growth Potential',
-    'Switzerland Structure',
-    'Valuation Teeter-Totter',
-    'Recurring Revenue',
-    'Monopoly Control',
-    'Customer Satisfaction',
-    'Hub & Spoke'
-  ];
-
-  coreDrivers.forEach((driverName) => {
+  for (const driverName of coreDrivers) {
     const score = categoryScores[driverName];
-    if (!score) return;
+    if (!score) continue;
+    currentY += drawCategoryBar(doc, x, currentY, driverName, score.score, score.weight, '');
+  }
 
-    drawCategoryBar(doc, 30, yPos, driverName, score.score, score.weight, '');
-    yPos += ROW_HEIGHT + 5; // Fixed increment
-  });
+  currentY += 20;
 
-  // Add gap before Part II
-  yPos += SECTION_GAP;
+  doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', x, currentY);
+  currentY = doc.y + 10;
 
-  // Part II heading
-  doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', 30, yPos);
-  yPos += SECTION_GAP;
-
-  // Supplemental drivers
-  const supplementalDrivers = [
-    'Financial Health & Analysis',
-    'Market & Competitive Position',
-    'Operational Excellence',
-    'Human Capital & Organization',
-    'Legal, Risk & Compliance',
-    'Strategic Assets & Intangibles'
-  ];
-
-  supplementalDrivers.forEach((driverName) => {
+  for (const driverName of supplementalDrivers) {
     const score = categoryScores[driverName];
-    if (!score) return;
+    if (!score) continue;
+    currentY += drawCategoryBar(doc, x, currentY, driverName, score.score, 0, '');
+  }
 
-    drawCategoryBar(doc, 30, yPos, driverName, score.score, 0, '');
-    yPos += ROW_HEIGHT + 5;
-  });
+  return currentY - startY;
 }
 
 function drawCategoryBar(
@@ -229,7 +207,7 @@ function drawCategoryBar(
   score: number,
   weight: number,
   icon: string
-) {
+): number {
   // FIXED: Use fixed height for each row
   const ROW_HEIGHT = 25;
 
@@ -273,6 +251,7 @@ function drawCategoryBar(
   });
 
   // CRITICAL: Don't modify currentY here
+  return ROW_HEIGHT + 5;
 }
 
 function generateCategoryDetailPage(
@@ -287,7 +266,7 @@ function generateCategoryDetailPage(
 
   if (!details) return;
 
-  drawScoreGauge(doc, 350, 50, score.score);
+  drawScoreGauge(doc, 350, 50, score.score, doc.page.width - 80);
 
   doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, { width: 280 });
 
@@ -340,44 +319,43 @@ async function generateCategoryDetailSection(
   score: CategoryScore,
   isCore: boolean,
   answers: Record<string, AssessmentAnswer>,
-  startY: number
-) {
+  x: number,
+  y: number,
+  maxWidth: number
+): Promise<number> {
   const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
   const details = (descriptions as Record<string, any>)[category];
 
-  if (!details) return;
+  if (!details) return 0;
 
-  const pageWidth = doc.page.width;
-  const leftMargin = 30;
-  const maxX = doc.page.width - 50 - 200;
-  const gaugeX = Math.min(350, maxX);
-  const textWidth = gaugeX - 70;
-  drawScoreGauge(doc, gaugeX, startY, score.score);
+  const gaugeX = Math.min(x + 320, doc.page.width - 50 - 200);
+  const textWidth = gaugeX - x - 20;
+  const gaugeHeight = drawScoreGauge(doc, gaugeX, y, score.score, maxWidth);
 
-  let yPos = startY;
+  let yPos = y;
 
-  doc.fontSize(20).fillColor('#1e40af').text(details.title, leftMargin, yPos, {
+  doc.fontSize(20).fillColor('#1e40af').text(details.title, x, yPos, {
     width: textWidth
   });
   yPos = doc.y + 5;
 
-  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, leftMargin, yPos, {
+  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, x, yPos, {
     width: textWidth,
     lineGap: 2
   });
   yPos = doc.y + 10;
 
-  doc.fontSize(40).fillColor(getScoreColor(score.score)).text(`${score.score}`, leftMargin, yPos, {
+  doc.fontSize(40).fillColor(getScoreColor(score.score)).text(`${score.score}`, x, yPos, {
     width: 80,
     align: 'center'
   });
-  doc.fontSize(14).fillColor('#6b7280').text('/100', leftMargin + 90, yPos + 12);
+  doc.fontSize(14).fillColor('#6b7280').text('/100', x + 90, yPos + 12);
   yPos += 50;
 
   doc
     .fontSize(11)
     .fillColor('#111827')
-    .text(details.description, leftMargin, yPos, {
+    .text(details.description, x, yPos, {
       width: textWidth,
       align: 'justify',
       lineGap: 3
@@ -385,10 +363,10 @@ async function generateCategoryDetailSection(
 
   let currentY = doc.y + 15;
 
-  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', leftMargin, currentY);
+  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', x, currentY);
   currentY += 18;
   details.insights.forEach((insight: string) => {
-    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, leftMargin + 20, currentY, {
+    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, x + 20, currentY, {
       width: textWidth - 20,
       lineGap: 2
     });
@@ -397,11 +375,11 @@ async function generateCategoryDetailSection(
 
   if (score.score < 60) {
     currentY += 12;
-    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', leftMargin, currentY);
+    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', x, currentY);
 
     currentY += 12;
     const recommendations = getImprovementRecommendation(category, score.score);
-    doc.fontSize(10).fillColor('#374151').text(recommendations, leftMargin, currentY, {
+    doc.fontSize(10).fillColor('#374151').text(recommendations, x, currentY, {
       width: textWidth,
       align: 'justify',
       lineGap: 3
@@ -427,15 +405,18 @@ async function generateCategoryDetailSection(
 
     if (categoryInsight && currentY < doc.page.height - 150) {
       currentY += 15;
-      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', leftMargin, currentY);
+      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', x, currentY);
       currentY += 15;
-      doc.fontSize(9).fillColor('#374151').text(categoryInsight, leftMargin, currentY, {
+      doc.fontSize(9).fillColor('#374151').text(categoryInsight, x, currentY, {
         width: textWidth,
         align: 'justify',
         lineGap: 3
       });
     }
   }
+
+  const endY = Math.max(currentY, y + gaugeHeight);
+  return endY - y + 10;
 }
 
 export async function generatePDFReport(
@@ -464,36 +445,38 @@ export async function generatePDFReport(
       const pageManager = new PDFPageManager(doc, footerText);
       const flowManager = new PDFFlowManager(doc, pageManager);
 
-      await flowManager.addSection(300, (y) => {
+      await flowManager.addContent(300, async (doc, x, y, maxWidth) => {
         doc
           .fillColor('#1e40af')
           .fontSize(28)
-          .text('Value Builder Assessment Report', 30, y + 20, {
-            width: doc.page.width - 60,
+          .text('Value Builder Assessment Report', x, y + 20, {
+            width: maxWidth,
             align: 'center'
           });
 
         let base = y + 120;
         doc.fillColor('black').fontSize(16);
-        doc.text(`Assessed By: ${userName}`, 30, base);
-        doc.text(`Email: ${userEmail}`, 30, base + 20);
-        doc.text(`Company: ${companyName || 'Not Specified'}`, 30, base + 40);
-        doc.text(`Industry: ${industry || 'Not Specified'}`, 30, base + 60);
-        doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, 30, base + 80);
+        doc.text(`Assessed By: ${userName}`, x, base);
+        doc.text(`Email: ${userEmail}`, x, base + 20);
+        doc.text(`Company: ${companyName || 'Not Specified'}`, x, base + 40);
+        doc.text(`Industry: ${industry || 'Not Specified'}`, x, base + 60);
+        doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, x, base + 80);
+        return base + 100 - y;
       });
 
-      await flowManager.addSection(400, (y) => {
-        doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', 30, y, {
-          width: doc.page.width - 60,
+      await flowManager.addContent(400, async (doc, x, y, maxWidth) => {
+        doc.fontSize(24).fillColor('#1e40af').text('Overall Value Builder Score', x, y, {
+          width: maxWidth,
           align: 'center'
         });
 
-        drawScoreGauge(doc, Math.min(doc.page.width / 2 - 150, doc.page.width - 250), y + 40, overallScore);
+        drawScoreGauge(doc, Math.min(doc.page.width / 2 - 150, doc.page.width - 250), y + 40, overallScore, maxWidth);
 
-        doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, 30, y + 240, {
-          width: doc.page.width - 60,
+        doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, x, y + 240, {
+          width: maxWidth,
           align: 'center'
         });
+        return 280;
       });
 
       const aiInsights = await generateAIInsights(
@@ -507,44 +490,40 @@ export async function generatePDFReport(
       if (aiInsights && aiInsights.trim()) {
         const lines = aiInsights.split('\n');
         const estimatedHeight = 120 + lines.length * 12;
-        await flowManager.addSection(estimatedHeight, async (y) => {
-          doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', 30, y);
-          doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', 30, y + 30);
+        await flowManager.addContent(estimatedHeight, async (doc, x, y, maxWidth) => {
+          doc.fontSize(24).fillColor('#1e40af').text('Executive Analysis & Strategic Insights', x, y);
+          doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', x, y + 30);
 
           let aiY = y + 60;
           for (const line of lines) {
-            if (aiY > doc.page.height - 60) {
-              pageManager.newPage();
-              aiY = pageManager.getCurrentY();
-            }
-
             const cleanLine = line.replace(/\*\*/g, '').trim();
 
             if (line.includes('**') && line.startsWith('**')) {
-              doc.fontSize(14).fillColor('#1e40af').text(cleanLine, 30, aiY);
+              doc.fontSize(14).fillColor('#1e40af').text(cleanLine, x, aiY);
               aiY += 20;
             } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
               const content = cleanLine.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
-              doc.fontSize(10).fillColor('#374151').text(`• ${content}`, 40, aiY, {
-                width: doc.page.width - 80,
+              doc.fontSize(10).fillColor('#374151').text(`• ${content}`, x + 10, aiY, {
+                width: maxWidth - 10,
                 lineGap: 2
               });
               aiY = doc.y + 8;
             } else if (cleanLine) {
-              doc.fontSize(10).fillColor('#111827').text(cleanLine, 30, aiY, {
-                width: doc.page.width - 60,
+              doc.fontSize(10).fillColor('#111827').text(cleanLine, x, aiY, {
+                width: maxWidth,
                 align: 'justify',
                 lineGap: 3
               });
               aiY = doc.y + 10;
             }
           }
+          return aiY - y;
         });
       }
 
       if (Object.keys(categoryScores).length > 0) {
-        await flowManager.addSection(300, (y) => {
-          generateSummaryPage(doc, categoryScores, y);
+        await flowManager.addContent(300, async (doc, x, y, maxWidth) => {
+          return await generateSummaryPage(doc, x, y, maxWidth, categoryScores);
         });
       }
 
@@ -554,30 +533,26 @@ export async function generatePDFReport(
 
       if (areasForImprovement.length > 0) {
         const estHeight = 80 + areasForImprovement.length * 70;
-        await flowManager.addSection(estHeight, (y) => {
+        await flowManager.addContent(estHeight, async (doc, x, y, maxWidth) => {
           let yPos = y;
-          doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', 30, yPos);
+          doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', x, yPos);
           yPos += 30;
 
           for (const [category, score] of areasForImprovement) {
-            if (yPos > doc.page.height - 100) {
-              pageManager.newPage();
-              yPos = pageManager.getCurrentY();
-            }
-
             doc
               .fillColor('#ef4444')
               .fontSize(14)
-              .text(`${category} (Current Score: ${score.score}/100)`, 30, yPos);
+              .text(`${category} (Current Score: ${score.score}/100)`, x, yPos);
             yPos += 18;
 
             const recommendation = getImprovementRecommendation(category, score.score);
-            doc.fillColor('black').fontSize(10).text(recommendation, 30, yPos, {
-              width: doc.page.width - 60,
+            doc.fillColor('black').fontSize(10).text(recommendation, x, yPos, {
+              width: maxWidth,
               lineGap: 2
             });
             yPos = doc.y + 15;
           }
+          return yPos - y;
         });
       }
 
@@ -586,14 +561,16 @@ export async function generatePDFReport(
         const score = categoryScores[category];
         if (!score) continue;
         const height = calculateCategoryHeight(score);
-        await flowManager.addSection(height, async (y) => {
-          await generateCategoryDetailSection(
+        await flowManager.addContent(height, async (doc, x, y, maxWidth) => {
+          return await generateCategoryDetailSection(
             doc,
             category,
             score,
             coreDrivers.includes(category),
             answers,
-            y
+            x,
+            y,
+            maxWidth
           );
         });
       }
@@ -686,4 +663,5 @@ function getScoreColor(score: number): string {
 function getScoreBarColor(score: number): string {
   return getScoreColor(score);
 }
+
 
