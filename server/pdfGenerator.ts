@@ -81,7 +81,11 @@ class PDFFlowManager {
 
   async addSection(
     estimatedHeight: number,
-    drawFn: (doc: PDFKit.PDFDocument, startY: number, flow: PDFFlowManager) => Promise<void>
+    drawFn: (
+      doc: PDFKit.PDFDocument,
+      startY: number,
+      flow: PDFFlowManager
+    ) => Promise<void>
   ): Promise<void> {
     if (this.currentY + estimatedHeight > this.pageHeight - this.margins.bottom) {
       this.newPage();
@@ -92,6 +96,9 @@ class PDFFlowManager {
     if (this.sectionHasContent) {
       this.pageManager.markContentAdded();
     }
+
+    // Ensure spacing between sections
+    this.currentY += 20;
   }
 
   markContentAdded(): void {
@@ -197,10 +204,10 @@ async function drawAIInsights(
     .fontSize(24)
     .fillColor('#1e40af')
     .text('Executive Analysis & Strategic Insights', margins.left, currentY);
-  currentY += 30;
+  currentY = doc.y + 25;
 
   doc.fontSize(10).fillColor('#6b7280').text('Powered by AI Analysis', margins.left, currentY);
-  currentY += 40;
+  currentY = doc.y + 20;
 
   const lines = insights.split('\n');
 
@@ -214,8 +221,9 @@ async function drawAIInsights(
 
     const textHeight = doc.heightOfString(cleanLine, { width: contentWidth, align: 'justify' });
     const pageBottom = doc.page.height - 90;
+    const totalSpaceNeeded = textHeight + 20;
 
-    if (currentY + textHeight > pageBottom) {
+    if (currentY + totalSpaceNeeded > pageBottom) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -223,6 +231,7 @@ async function drawAIInsights(
     if (line.includes('**') && line.startsWith('**')) {
       doc.fontSize(14).fillColor('#1e40af');
       doc.text(cleanLine, margins.left, currentY);
+      currentY = doc.y + 25;
     } else if (cleanLine.startsWith('-') || /^\d+\./.test(cleanLine)) {
       doc.fontSize(10).fillColor('#374151');
       const bullet = cleanLine.startsWith('-') ? '•' : cleanLine.match(/^\d+\./)?.[0] || '•';
@@ -232,16 +241,17 @@ async function drawAIInsights(
         width: contentWidth - 25,
         align: 'left'
       });
+      currentY = doc.y + 12;
     } else {
       doc.fontSize(10).fillColor('#111827');
       doc.text(cleanLine, margins.left, currentY, {
         width: contentWidth,
         align: 'justify'
       });
+      currentY = doc.y + 15;
     }
 
     flow.markContentAdded();
-    currentY = doc.y + 12;
   }
   flow.setCurrentY(currentY);
 }
@@ -258,16 +268,17 @@ async function drawPriorityAreas(
 
   let currentY = startY;
   doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', margins.left, currentY);
-  currentY += 30;
+  currentY = doc.y + 25;
 
   for (let i = 0; i < areas.length; i++) {
     const [category, score] = areas[i];
     doc.fillColor('#ef4444').fontSize(14).text(`${category} (Current Score: ${score.score}/100)`, margins.left, currentY);
     flow.markContentAdded();
-    currentY += 18;
+    currentY = doc.y + 10;
     const recommendation = getImprovementRecommendation(category, score.score);
     const recHeight = doc.heightOfString(recommendation, { width: maxWidth, lineGap: 3 });
-    if (currentY + recHeight > doc.page.height - 90) {
+    const totalSpaceNeeded = recHeight + 20;
+    if (currentY + totalSpaceNeeded > doc.page.height - 90) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -379,7 +390,7 @@ function drawCategoryBar(
   });
 
   // CRITICAL: Don't modify currentY here
-  return ROW_HEIGHT + 5;
+  return ROW_HEIGHT + 10;
 }
 
 function generateCategoryDetailPage(
@@ -466,12 +477,12 @@ async function drawCategoryDetail(
   doc.fontSize(20).fillColor('#1e40af')
     .text(details.title, margins.left, currentY, { width: textWidth });
   flow.markContentAdded();
-  currentY = doc.y + 5;
+  currentY = doc.y + 10;
 
   doc.fontSize(12).fillColor('#6b7280')
     .text(details.subtitle, margins.left, currentY, { width: textWidth });
   flow.markContentAdded();
-  currentY = doc.y + 10;
+  currentY = doc.y + 15;
 
   // Score display
   doc.fontSize(40).fillColor(getScoreColor(score.score))
@@ -483,7 +494,8 @@ async function drawCategoryDetail(
 
   // Description
   const descHeight = doc.heightOfString(details.description, { width: textWidth, align: 'justify' });
-  if (currentY + descHeight > doc.page.height - 90) {
+  const totalDescSpace = descHeight + 20;
+  if (currentY + totalDescSpace > doc.page.height - 90) {
     flow.addPage();
     currentY = flow.getCurrentY();
   }
@@ -499,12 +511,13 @@ async function drawCategoryDetail(
   doc.fontSize(14).fillColor('#1e40af')
     .text('Key Assessment Areas:', margins.left, currentY);
   flow.markContentAdded();
-  currentY += 20;
+  currentY = doc.y + 20;
 
   for (let i = 0; i < details.insights.length; i++) {
     const insight = details.insights[i];
     const insHeight = doc.heightOfString(`• ${insight}`, { width: textWidth - 20 });
-    if (currentY + insHeight > doc.page.height - 90) {
+    const neededSpace = insHeight + 12;
+    if (currentY + neededSpace > doc.page.height - 90) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -513,7 +526,7 @@ async function drawCategoryDetail(
         width: textWidth - 20
       });
     flow.markContentAdded();
-    currentY = doc.y + 8;
+    currentY = doc.y + 12;
   }
 
   // Improvement Opportunities
@@ -521,11 +534,12 @@ async function drawCategoryDetail(
   doc.fontSize(14).fillColor('#1e40af')
     .text('Improvement Opportunities:', margins.left, currentY);
   flow.markContentAdded();
-  currentY += 15;
+  currentY = doc.y + 20;
 
   const recommendations = getImprovementRecommendation(category, score.score);
   const recHeight = doc.heightOfString(recommendations, { width: textWidth, align: 'justify' });
-  if (currentY + recHeight > doc.page.height - 90) {
+  const totalRecSpace = recHeight + 20;
+  if (currentY + totalRecSpace > doc.page.height - 90) {
     flow.addPage();
     currentY = flow.getCurrentY();
   }
