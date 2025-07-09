@@ -75,4 +75,5 @@ export interface CategoryScore {
   score: number;
   weight: number;
   maxScore: number;
+  analysis?: string;
 }
