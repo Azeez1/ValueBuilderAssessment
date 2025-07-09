@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
 import { generatePDFReport } from "./pdfGenerator";
+import { generateHTMLReport } from "./htmlReportGenerator";
+import { htmlToPdfBuffer } from "./pdfConverter";
+import { generateAIInsights } from "./openaiService";
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -132,6 +135,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(results);
     } catch (error) {
       res.status(500).json({ error: "Failed to retrieve results" });
+    }
+  });
+
+  // HTML report preview
+  app.get("/api/reports/preview/:sessionId", async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const assessment = await storage.getAssessmentBySessionId(sessionId);
+      if (!assessment || !assessment.categoryScores) {
+        return res.status(404).json({ error: "Assessment not found" });
+      }
+
+      const overall = assessment.totalScore || 0;
+      const insights = await generateAIInsights(
+        assessment.answers,
+        assessment.categoryScores,
+        overall,
+        req.query.companyName as string | undefined,
+        req.query.industry as string | undefined
+      );
+
+      const html = await generateHTMLReport({
+        userName: (req.query.userName as string) || "User",
+        companyName: req.query.companyName as string | undefined,
+        industry: req.query.industry as string | undefined,
+        overallScore: overall,
+        categoryScores: assessment.categoryScores,
+        aiInsights: insights,
+      });
+
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate preview" });
+    }
+  });
+
+  // Export HTML report as PDF
+  app.get("/api/reports/export/pdf/:sessionId", async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const assessment = await storage.getAssessmentBySessionId(sessionId);
+      if (!assessment || !assessment.categoryScores) {
+        return res.status(404).json({ error: "Assessment not found" });
+      }
+
+      const overall = assessment.totalScore || 0;
+      const insights = await generateAIInsights(
+        assessment.answers,
+        assessment.categoryScores,
+        overall,
+        req.query.companyName as string | undefined,
+        req.query.industry as string | undefined
+      );
+
+      const html = await generateHTMLReport({
+        userName: (req.query.userName as string) || "User",
+        companyName: req.query.companyName as string | undefined,
+        industry: req.query.industry as string | undefined,
+        overallScore: overall,
+        categoryScores: assessment.categoryScores,
+        aiInsights: insights,
+      });
+
+      const pdf = await htmlToPdfBuffer(html);
+      res.setHeader("Content-Type", "application/pdf");
+      res.send(pdf);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to export PDF" });
     }
   });
 
