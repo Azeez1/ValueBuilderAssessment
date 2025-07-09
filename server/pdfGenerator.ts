@@ -72,6 +72,7 @@ class PDFFlowManager {
   private currentY: number;
   private readonly pageHeight: number;
   private readonly margins = { top: 50, bottom: 90, left: 30, right: 50 };
+  private sectionHasContent = false;
 
   constructor(private doc: PDFKit.PDFDocument, private pageManager: PDFPageManager) {
     this.currentY = this.margins.top;
@@ -86,8 +87,15 @@ class PDFFlowManager {
       this.newPage();
     }
 
+    this.sectionHasContent = false;
     await drawFn(this.doc, this.currentY, this);
-    this.pageManager.markContentAdded();
+    if (this.sectionHasContent) {
+      this.pageManager.markContentAdded();
+    }
+  }
+
+  markContentAdded(): void {
+    this.sectionHasContent = true;
   }
 
   addPage(): void {
@@ -196,7 +204,8 @@ async function drawAIInsights(
 
   const lines = insights.split('\n');
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const cleanLine = line.replace(/\*\*/g, '').trim();
     if (!cleanLine) {
       currentY += 10;
@@ -205,8 +214,9 @@ async function drawAIInsights(
 
     const textHeight = doc.heightOfString(cleanLine, { width: contentWidth, align: 'justify' });
     const pageBottom = doc.page.height - 90;
+    const moreLinesToProcess = i < lines.length - 1;
 
-    if (currentY + textHeight > pageBottom) {
+    if (currentY + textHeight > pageBottom && moreLinesToProcess) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -231,6 +241,7 @@ async function drawAIInsights(
       });
     }
 
+    flow.markContentAdded();
     currentY = doc.y + 12;
   }
   flow.setCurrentY(currentY);
@@ -250,12 +261,15 @@ async function drawPriorityAreas(
   doc.fillColor('#1e40af').fontSize(20).text('Priority Areas for Improvement', margins.left, currentY);
   currentY += 30;
 
-  for (const [category, score] of areas) {
+  for (let i = 0; i < areas.length; i++) {
+    const [category, score] = areas[i];
     doc.fillColor('#ef4444').fontSize(14).text(`${category} (Current Score: ${score.score}/100)`, margins.left, currentY);
+    flow.markContentAdded();
     currentY += 18;
     const recommendation = getImprovementRecommendation(category, score.score);
     const recHeight = doc.heightOfString(recommendation, { width: maxWidth, lineGap: 3 });
-    if (currentY + recHeight > doc.page.height - 90) {
+    const hasMore = i < areas.length - 1;
+    if (currentY + recHeight > doc.page.height - 90 && hasMore) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -263,6 +277,7 @@ async function drawPriorityAreas(
       width: maxWidth,
       lineGap: 3
     });
+    flow.markContentAdded();
     currentY = doc.y + 20;
   }
   flow.setCurrentY(currentY);
@@ -284,26 +299,31 @@ async function drawSummaryPage(
     width: maxWidth,
     align: 'center'
   });
+  flow.markContentAdded();
   currentY = doc.y + 20;
 
   doc.fontSize(16).fillColor('#111827').text('Part I: Core Value Builder Drivers (70% weight)', margins.left, currentY);
+  flow.markContentAdded();
   currentY = doc.y + 10;
 
   for (const driverName of coreDrivers) {
     const score = categoryScores[driverName];
     if (!score) continue;
     currentY += drawCategoryBar(doc, margins.left, currentY, driverName, score.score, score.weight, '');
+    flow.markContentAdded();
   }
 
   currentY += 20;
 
   doc.fontSize(16).fillColor('#111827').text('Part II: Supplemental Deep-Dive Analysis (30% weight)', margins.left, currentY);
+  flow.markContentAdded();
   currentY = doc.y + 10;
 
   for (const driverName of supplementalDrivers) {
     const score = categoryScores[driverName];
     if (!score) continue;
     currentY += drawCategoryBar(doc, margins.left, currentY, driverName, score.score, 0, '');
+    flow.markContentAdded();
   }
 
   flow.setCurrentY(currentY);
@@ -447,10 +467,12 @@ async function drawCategoryDetail(
 
   doc.fontSize(20).fillColor('#1e40af')
     .text(details.title, margins.left, currentY, { width: textWidth });
+  flow.markContentAdded();
   currentY = doc.y + 5;
 
   doc.fontSize(12).fillColor('#6b7280')
     .text(details.subtitle, margins.left, currentY, { width: textWidth });
+  flow.markContentAdded();
   currentY = doc.y + 10;
 
   // Score display
@@ -458,6 +480,7 @@ async function drawCategoryDetail(
     .text(score.score.toString(), margins.left, currentY, { width: 80, align: 'center' });
   doc.fontSize(14).fillColor('#6b7280')
     .text('/100', margins.left + 90, currentY + 12);
+  flow.markContentAdded();
   currentY += 60;
 
   // Description
@@ -471,16 +494,20 @@ async function drawCategoryDetail(
       width: textWidth,
       align: 'justify'
     });
+  flow.markContentAdded();
   currentY = doc.y + 20;
 
   // Key Assessment Areas
   doc.fontSize(14).fillColor('#1e40af')
     .text('Key Assessment Areas:', margins.left, currentY);
+  flow.markContentAdded();
   currentY += 20;
 
-  for (const insight of details.insights) {
+  for (let i = 0; i < details.insights.length; i++) {
+    const insight = details.insights[i];
     const insHeight = doc.heightOfString(`• ${insight}`, { width: textWidth - 20 });
-    if (currentY + insHeight > doc.page.height - 90) {
+    const hasMore = i < details.insights.length - 1;
+    if (currentY + insHeight > doc.page.height - 90 && hasMore) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -488,6 +515,7 @@ async function drawCategoryDetail(
       .text(`• ${insight}`, margins.left + 20, currentY, {
         width: textWidth - 20
       });
+    flow.markContentAdded();
     currentY = doc.y + 8;
   }
 
@@ -495,6 +523,7 @@ async function drawCategoryDetail(
   currentY += 10;
   doc.fontSize(14).fillColor('#1e40af')
     .text('Improvement Opportunities:', margins.left, currentY);
+  flow.markContentAdded();
   currentY += 15;
 
   const recommendations = getImprovementRecommendation(category, score.score);
@@ -508,6 +537,7 @@ async function drawCategoryDetail(
       width: textWidth,
       align: 'justify'
     });
+  flow.markContentAdded();
   currentY = doc.y + 20;
 
   // CRITICAL FIX: AI Analysis Section
@@ -515,6 +545,7 @@ async function drawCategoryDetail(
     // Add Analysis header
     doc.fontSize(12).fillColor('#1e40af')
       .text('Analysis:', margins.left, currentY);
+    flow.markContentAdded();
     currentY += 15;
 
     // Generate or retrieve AI analysis
@@ -531,7 +562,8 @@ async function drawCategoryDetail(
           align: 'justify'
         });
 
-        if (currentY + paragraphHeight > doc.page.height - 90) {
+        const hasMore = paragraphs.indexOf(paragraph) < paragraphs.length - 1;
+        if (currentY + paragraphHeight > doc.page.height - 90 && hasMore) {
           flow.addPage();
           currentY = flow.getCurrentY();
         }
@@ -542,6 +574,7 @@ async function drawCategoryDetail(
             width: textWidth,
             align: 'justify'
           });
+        flow.markContentAdded();
         currentY = doc.y + 10;
       }
     } else {
@@ -551,6 +584,7 @@ async function drawCategoryDetail(
           width: textWidth,
           align: 'left'
         });
+      flow.markContentAdded();
       currentY += 20;
     }
   }
@@ -595,14 +629,20 @@ export async function generatePDFReport(
             width: maxWidth,
             align: 'center'
           });
+        flow.markContentAdded();
 
         let base = y + 120;
         doc.fillColor('black').fontSize(16);
         doc.text(`Assessed By: ${userName}`, margins.left, base);
+        flow.markContentAdded();
         doc.text(`Email: ${userEmail}`, margins.left, base + 20);
+        flow.markContentAdded();
         doc.text(`Company: ${companyName || 'Not Specified'}`, margins.left, base + 40);
+        flow.markContentAdded();
         doc.text(`Industry: ${industry || 'Not Specified'}`, margins.left, base + 60);
+        flow.markContentAdded();
         doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, margins.left, base + 80);
+        flow.markContentAdded();
         flow.setCurrentY(base + 100);
       });
 
@@ -614,13 +654,16 @@ export async function generatePDFReport(
           width: maxWidth,
           align: 'center'
         });
+        flow.markContentAdded();
 
         drawScoreGauge(doc, Math.min(doc.page.width / 2 - 150, doc.page.width - 250), y + 40, overallScore);
+        flow.markContentAdded();
 
         doc.fontSize(24).fillColor('#111827').text(`Grade: ${getGrade(overallScore)}`, margins.left, y + 240, {
           width: maxWidth,
           align: 'center'
         });
+        flow.markContentAdded();
         flow.setCurrentY(y + 280);
       });
 
