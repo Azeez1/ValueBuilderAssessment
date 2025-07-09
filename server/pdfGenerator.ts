@@ -80,18 +80,25 @@ class PDFFlowManager {
 
   async addSection(
     estimatedHeight: number,
-    drawFn: (doc: PDFKit.PDFDocument, startY: number) => Promise<number>
+    drawFn: (doc: PDFKit.PDFDocument, startY: number, flow: PDFFlowManager) => Promise<void>
   ): Promise<void> {
     if (this.currentY + estimatedHeight > this.pageHeight - this.margins.bottom) {
-      await this.newPage();
+      this.newPage();
     }
 
-    const actualHeight = await drawFn(this.doc, this.currentY);
-    this.currentY += actualHeight;
+    await drawFn(this.doc, this.currentY, this);
     this.pageManager.markContentAdded();
   }
 
-  private async newPage(): Promise<void> {
+  addPage(): void {
+    this.newPage();
+  }
+
+  setCurrentY(y: number): void {
+    this.currentY = y;
+  }
+
+  private newPage(): void {
     this.pageManager.newPage();
     this.currentY = this.margins.top;
   }
@@ -170,8 +177,9 @@ function drawScoreGauge(
 async function drawAIInsights(
   doc: PDFKit.PDFDocument,
   startY: number,
-  insights: string
-): Promise<number> {
+  insights: string,
+  flow: PDFFlowManager
+): Promise<void> {
   const pageWidth = doc.page.width;
   const margins = { left: 30, right: 50 };
   const contentWidth = pageWidth - margins.left - margins.right;
@@ -187,7 +195,6 @@ async function drawAIInsights(
   currentY += 40;
 
   const lines = insights.split('\n');
-  const pageBottom = doc.page.height - 90;
 
   for (const line of lines) {
     const cleanLine = line.replace(/\*\*/g, '').trim();
@@ -197,9 +204,11 @@ async function drawAIInsights(
     }
 
     const textHeight = doc.heightOfString(cleanLine, { width: contentWidth, align: 'justify' });
+    const pageBottom = doc.page.height - 90;
 
     if (currentY + textHeight > pageBottom) {
-      return currentY - startY;
+      flow.addPage();
+      currentY = flow.getCurrentY();
     }
 
     if (line.includes('**') && line.startsWith('**')) {
@@ -224,15 +233,15 @@ async function drawAIInsights(
 
     currentY = doc.y + 12;
   }
-
-  return currentY - startY;
+  flow.setCurrentY(currentY);
 }
 
 async function drawPriorityAreas(
   doc: PDFKit.PDFDocument,
   startY: number,
-  areas: Array<[string, CategoryScore]>
-): Promise<number> {
+  areas: Array<[string, CategoryScore]>,
+  flow: PDFFlowManager
+): Promise<void> {
   const pageWidth = doc.page.width;
   const margins = { left: 30, right: 50 };
   const maxWidth = pageWidth - margins.left - margins.right;
@@ -245,21 +254,26 @@ async function drawPriorityAreas(
     doc.fillColor('#ef4444').fontSize(14).text(`${category} (Current Score: ${score.score}/100)`, margins.left, currentY);
     currentY += 18;
     const recommendation = getImprovementRecommendation(category, score.score);
+    const recHeight = doc.heightOfString(recommendation, { width: maxWidth, lineGap: 3 });
+    if (currentY + recHeight > doc.page.height - 90) {
+      flow.addPage();
+      currentY = flow.getCurrentY();
+    }
     doc.fillColor('black').fontSize(10).text(recommendation, margins.left, currentY, {
       width: maxWidth,
       lineGap: 3
     });
     currentY = doc.y + 20;
   }
-
-  return currentY - startY;
+  flow.setCurrentY(currentY);
 }
 
 async function drawSummaryPage(
   doc: PDFKit.PDFDocument,
   startY: number,
-  categoryScores: Record<string, CategoryScore>
-): Promise<number> {
+  categoryScores: Record<string, CategoryScore>,
+  flow: PDFFlowManager
+): Promise<void> {
   let currentY = startY;
   const pageWidth = doc.page.width;
   const margins = { left: 30, right: 50 };
@@ -292,7 +306,7 @@ async function drawSummaryPage(
     currentY += drawCategoryBar(doc, margins.left, currentY, driverName, score.score, 0, '');
   }
 
-  return currentY - startY;
+  flow.setCurrentY(currentY);
 }
 
 function drawCategoryBar(
@@ -414,8 +428,9 @@ async function drawCategoryDetail(
   startY: number,
   category: string,
   score: CategoryScore,
-  answers: Record<string, AssessmentAnswer>
-): Promise<number> {
+  answers: Record<string, AssessmentAnswer>,
+  flow: PDFFlowManager
+): Promise<void> {
   const pageWidth = doc.page.width;
   const margins = { left: 30, right: 50 };
   const gaugeWidth = 200;
@@ -446,6 +461,11 @@ async function drawCategoryDetail(
   currentY += 60;
 
   // Description
+  const descHeight = doc.heightOfString(details.description, { width: textWidth, align: 'justify' });
+  if (currentY + descHeight > doc.page.height - 90) {
+    flow.addPage();
+    currentY = flow.getCurrentY();
+  }
   doc.fontSize(11).fillColor('#111827')
     .text(details.description, margins.left, currentY, {
       width: textWidth,
@@ -459,6 +479,11 @@ async function drawCategoryDetail(
   currentY += 20;
 
   for (const insight of details.insights) {
+    const insHeight = doc.heightOfString(`• ${insight}`, { width: textWidth - 20 });
+    if (currentY + insHeight > doc.page.height - 90) {
+      flow.addPage();
+      currentY = flow.getCurrentY();
+    }
     doc.fontSize(10).fillColor('#374151')
       .text(`• ${insight}`, margins.left + 20, currentY, {
         width: textWidth - 20
@@ -473,6 +498,11 @@ async function drawCategoryDetail(
   currentY += 15;
 
   const recommendations = getImprovementRecommendation(category, score.score);
+  const recHeight = doc.heightOfString(recommendations, { width: textWidth, align: 'justify' });
+  if (currentY + recHeight > doc.page.height - 90) {
+    flow.addPage();
+    currentY = flow.getCurrentY();
+  }
   doc.fontSize(10).fillColor('#374151')
     .text(recommendations, margins.left, currentY, {
       width: textWidth,
@@ -502,8 +532,8 @@ async function drawCategoryDetail(
         });
 
         if (currentY + paragraphHeight > doc.page.height - 90) {
-          // Return current position and let FlowManager handle new page
-          return currentY - startY + 20;
+          flow.addPage();
+          currentY = flow.getCurrentY();
         }
 
         // Render the paragraph
@@ -525,7 +555,7 @@ async function drawCategoryDetail(
     }
   }
 
-  return currentY - startY + 20;
+  flow.setCurrentY(currentY + 20);
 }
 
 export async function generatePDFReport(
@@ -554,7 +584,7 @@ export async function generatePDFReport(
       const pageManager = new PDFPageManager(doc, footerText);
       const flowManager = new PDFFlowManager(doc, pageManager);
 
-      await flowManager.addSection(300, async (doc, y) => {
+      await flowManager.addSection(300, async (doc, y, flow) => {
         const pageWidth = doc.page.width;
         const margins = { left: 30, right: 50 };
         const maxWidth = pageWidth - margins.left - margins.right;
@@ -573,10 +603,10 @@ export async function generatePDFReport(
         doc.text(`Company: ${companyName || 'Not Specified'}`, margins.left, base + 40);
         doc.text(`Industry: ${industry || 'Not Specified'}`, margins.left, base + 60);
         doc.text(`Assessment Date: ${new Date().toLocaleDateString()}`, margins.left, base + 80);
-        return base + 100 - y;
+        flow.setCurrentY(base + 100);
       });
 
-      await flowManager.addSection(400, async (doc, y) => {
+      await flowManager.addSection(400, async (doc, y, flow) => {
         const pageWidth = doc.page.width;
         const margins = { left: 30, right: 50 };
         const maxWidth = pageWidth - margins.left - margins.right;
@@ -591,7 +621,7 @@ export async function generatePDFReport(
           width: maxWidth,
           align: 'center'
         });
-        return 280;
+        flow.setCurrentY(y + 280);
       });
 
       const aiInsights = await generateAIInsights(
@@ -604,14 +634,14 @@ export async function generatePDFReport(
 
       if (aiInsights && aiInsights.trim()) {
         const estimatedHeight = Math.min(800, 120 + aiInsights.split('\n').length * 15);
-        await flowManager.addSection(estimatedHeight, async (doc, y) => {
-          return await drawAIInsights(doc, y, aiInsights);
+        await flowManager.addSection(estimatedHeight, async (doc, y, flow) => {
+          await drawAIInsights(doc, y, aiInsights, flow);
         });
       }
 
       if (Object.keys(categoryScores).length > 0) {
-        await flowManager.addSection(300, async (doc, y) => {
-          return await drawSummaryPage(doc, y, categoryScores);
+        await flowManager.addSection(300, async (doc, y, flow) => {
+          await drawSummaryPage(doc, y, categoryScores, flow);
         });
       }
 
@@ -621,8 +651,8 @@ export async function generatePDFReport(
 
       if (areasForImprovement.length > 0) {
         const estHeight = 100 + areasForImprovement.length * 80;
-        await flowManager.addSection(estHeight, async (doc, y) => {
-          return await drawPriorityAreas(doc, y, areasForImprovement);
+        await flowManager.addSection(estHeight, async (doc, y, flow) => {
+          await drawPriorityAreas(doc, y, areasForImprovement, flow);
         });
       }
 
@@ -642,8 +672,8 @@ export async function generatePDFReport(
         const baseHeight = 400;
         const extraHeight = score.score < 60 ? 200 : 0;
         const aiHeight = score.score < 80 ? 150 : 0;
-        await flowManager.addSection(baseHeight + extraHeight + aiHeight, async (doc, y) => {
-          return await drawCategoryDetail(doc, y, category, score, answers);
+        await flowManager.addSection(baseHeight + extraHeight + aiHeight, async (doc, y, flow) => {
+          await drawCategoryDetail(doc, y, category, score, answers, flow);
         });
       }
 
