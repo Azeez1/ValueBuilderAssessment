@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
 import { generatePDFReport } from "./pdfGenerator";
 import { generateHTMLReport } from "./htmlReportGenerator";
-import { htmlToPdfBuffer } from "./pdfConverter";
 import { generateAIInsights } from "./openaiService";
 import { z } from "zod";
 import nodemailer from "nodemailer";
