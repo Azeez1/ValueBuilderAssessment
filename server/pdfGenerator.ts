@@ -214,9 +214,8 @@ async function drawAIInsights(
 
     const textHeight = doc.heightOfString(cleanLine, { width: contentWidth, align: 'justify' });
     const pageBottom = doc.page.height - 90;
-    const moreLinesToProcess = i < lines.length - 1;
 
-    if (currentY + textHeight > pageBottom && moreLinesToProcess) {
+    if (currentY + textHeight > pageBottom) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -268,8 +267,7 @@ async function drawPriorityAreas(
     currentY += 18;
     const recommendation = getImprovementRecommendation(category, score.score);
     const recHeight = doc.heightOfString(recommendation, { width: maxWidth, lineGap: 3 });
-    const hasMore = i < areas.length - 1;
-    if (currentY + recHeight > doc.page.height - 90 && hasMore) {
+    if (currentY + recHeight > doc.page.height - 90) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -506,8 +504,7 @@ async function drawCategoryDetail(
   for (let i = 0; i < details.insights.length; i++) {
     const insight = details.insights[i];
     const insHeight = doc.heightOfString(`• ${insight}`, { width: textWidth - 20 });
-    const hasMore = i < details.insights.length - 1;
-    if (currentY + insHeight > doc.page.height - 90 && hasMore) {
+    if (currentY + insHeight > doc.page.height - 90) {
       flow.addPage();
       currentY = flow.getCurrentY();
     }
@@ -562,8 +559,7 @@ async function drawCategoryDetail(
           align: 'justify'
         });
 
-        const hasMore = paragraphs.indexOf(paragraph) < paragraphs.length - 1;
-        if (currentY + paragraphHeight > doc.page.height - 90 && hasMore) {
+        if (currentY + paragraphHeight > doc.page.height - 90) {
           flow.addPage();
           currentY = flow.getCurrentY();
         }
