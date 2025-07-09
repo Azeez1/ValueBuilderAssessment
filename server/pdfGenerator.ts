@@ -5,8 +5,11 @@ import {
   coreDriverDescriptions,
   supplementalDriverDescriptions
 } from './reportTemplates';
-import { generateAIInsights, generateCategoryInsight } from './openaiService';
-import { questions } from '../client/src/data/questions';
+import {
+  generateAIInsights,
+  generateCategoryInsight,
+  generateFallbackAnalysis,
+} from './openaiService';
 
 // Driver categories used throughout the report
 export const coreDrivers = [
@@ -414,97 +417,104 @@ async function drawCategoryDetail(
 
   let currentY = startY;
 
+  // Draw gauge
   drawScoreGauge(doc, gaugeX, currentY, score.score);
 
+  // Draw title and content
   const details = getCategoryDetails(category);
 
-  doc.fontSize(20).fillColor('#1e40af').text(details.title, margins.left, currentY, {
-    width: textWidth
-  });
+  doc.fontSize(20).fillColor('#1e40af')
+    .text(details.title, margins.left, currentY, { width: textWidth });
   currentY = doc.y + 5;
 
-  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, margins.left, currentY, {
-    width: textWidth
-  });
+  doc.fontSize(12).fillColor('#6b7280')
+    .text(details.subtitle, margins.left, currentY, { width: textWidth });
   currentY = doc.y + 10;
 
-  doc.fontSize(40).fillColor(getScoreColor(score.score)).text(score.score.toString(), margins.left, currentY, {
-    width: 80,
-    align: 'center'
-  });
-  doc.fontSize(14).fillColor('#6b7280').text('/100', margins.left + 90, currentY + 12);
+  // Score display
+  doc.fontSize(40).fillColor(getScoreColor(score.score))
+    .text(score.score.toString(), margins.left, currentY, { width: 80, align: 'center' });
+  doc.fontSize(14).fillColor('#6b7280')
+    .text('/100', margins.left + 90, currentY + 12);
   currentY += 60;
 
-  const descHeight = doc.heightOfString(details.description, {
-    width: textWidth,
-    align: 'justify'
-  });
-
-  doc.fontSize(11).fillColor('#111827').text(details.description, margins.left, currentY, {
-    width: textWidth,
-    align: 'justify'
-  });
-  currentY = doc.y + 20;
-
-  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', margins.left, currentY);
-  currentY += 20;
-
-  for (const insight of details.insights) {
-    const insightHeight = doc.heightOfString(`• ${insight}`, {
-      width: textWidth - 20
-    });
-    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, margins.left + 20, currentY, {
-      width: textWidth - 20
-    });
-    currentY = doc.y + 8;
-  }
-
-  if (score.score < 60) {
-    currentY += 15;
-    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', margins.left, currentY);
-    currentY += 15;
-
-    const recommendations = getImprovementRecommendation(category, score.score);
-    doc.fontSize(10).fillColor('#374151').text(recommendations, margins.left, currentY, {
+  // Description
+  doc.fontSize(11).fillColor('#111827')
+    .text(details.description, margins.left, currentY, {
       width: textWidth,
       align: 'justify'
     });
-    currentY = doc.y + 10;
+  currentY = doc.y + 20;
+
+  // Key Assessment Areas
+  doc.fontSize(14).fillColor('#1e40af')
+    .text('Key Assessment Areas:', margins.left, currentY);
+  currentY += 20;
+
+  for (const insight of details.insights) {
+    doc.fontSize(10).fillColor('#374151')
+      .text(`• ${insight}`, margins.left + 20, currentY, {
+        width: textWidth - 20
+      });
+    currentY = doc.y + 8;
   }
 
+  // Improvement Opportunities
+  currentY += 10;
+  doc.fontSize(14).fillColor('#1e40af')
+    .text('Improvement Opportunities:', margins.left, currentY);
+  currentY += 15;
+
+  const recommendations = getImprovementRecommendation(category, score.score);
+  doc.fontSize(10).fillColor('#374151')
+    .text(recommendations, margins.left, currentY, {
+      width: textWidth,
+      align: 'justify'
+    });
+  currentY = doc.y + 20;
+
+  // CRITICAL FIX: AI Analysis Section
   if (score.score < 80) {
-    const categoryAnswers = Object.entries(answers)
-      .filter(([questionId]) => {
-        const question = questions.find(q => q.id === questionId);
-        return question?.section === category;
-      })
-      .map(([questionId, answer]) => ({
-        question: questions.find(q => q.id === questionId)!,
-        answer
-      }));
+    // Add Analysis header
+    doc.fontSize(12).fillColor('#1e40af')
+      .text('Analysis:', margins.left, currentY);
+    currentY += 15;
 
-    const aiAnalysis = await generateCategoryInsight(
-      category,
-      score.score,
-      categoryAnswers
-    );
-    if (aiAnalysis) {
-      currentY += 15;
-      doc.fontSize(12).fillColor('#1e40af').text('Analysis:', margins.left, currentY);
-      currentY += 15;
+    // Generate or retrieve AI analysis
+    const aiAnalysis = score.analysis || await generateCategoryInsight(category, score.score, answers);
 
-      const aiHeight = doc.heightOfString(aiAnalysis, {
-        width: textWidth,
-        align: 'justify'
-      });
+    if (aiAnalysis && aiAnalysis.trim()) {
+      // Split analysis into paragraphs for better formatting
+      const paragraphs = aiAnalysis.split('\n').filter(p => p.trim());
 
-      if (currentY + aiHeight < doc.page.height - 90) {
-        doc.fontSize(9).fillColor('#374151').text(aiAnalysis, margins.left, currentY, {
+      for (const paragraph of paragraphs) {
+        // Check if we need a new page
+        const paragraphHeight = doc.heightOfString(paragraph, {
           width: textWidth,
           align: 'justify'
         });
-        currentY = doc.y;
+
+        if (currentY + paragraphHeight > doc.page.height - 90) {
+          // Return current position and let FlowManager handle new page
+          return currentY - startY + 20;
+        }
+
+        // Render the paragraph
+        doc.fontSize(9).fillColor('#374151')
+          .text(paragraph, margins.left, currentY, {
+            width: textWidth,
+            align: 'justify'
+          });
+        currentY = doc.y + 10;
       }
+    } else {
+      // Fallback if no analysis available
+      doc.fontSize(9).fillColor('#6b7280')
+        .text('Analysis is being generated...', margins.left, currentY, {
+          width: textWidth,
+          align: 'left'
+        });
+      currentY += 20;
     }
   }
 
@@ -613,6 +623,15 @@ export async function generatePDFReport(
       for (const category of allCategories) {
         const score = categoryScores[category];
         if (!score) continue;
+        // Ensure AI analysis is available
+        if (score.score < 80 && !score.analysis) {
+          try {
+            score.analysis = await generateCategoryInsight(category, score.score, answers);
+          } catch (error) {
+            console.error(`Failed to generate analysis for ${category}:`, error);
+            score.analysis = generateFallbackAnalysis(category, score.score);
+          }
+        }
         const baseHeight = 400;
         const extraHeight = score.score < 60 ? 200 : 0;
         const aiHeight = score.score < 80 ? 150 : 0;

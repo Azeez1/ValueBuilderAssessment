@@ -1,12 +1,23 @@
 import OpenAI from 'openai';
 import { AssessmentAnswer, CategoryScore } from '@shared/schema';
 import { questions } from '../client/src/data/questions';
+import {
+  coreDriverDescriptions,
+  supplementalDriverDescriptions,
+} from './reportTemplates';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 const AI_MODEL = 'gpt-4.1';
+
+function getCategoryDetails(category: string) {
+  return (
+    (coreDriverDescriptions as Record<string, any>)[category] ||
+    (supplementalDriverDescriptions as Record<string, any>)[category]
+  );
+}
 
 export async function generateAIInsights(
   answers: Record<string, AssessmentAnswer>,
@@ -110,51 +121,49 @@ function buildAnswerContext(answers: Record<string, AssessmentAnswer>): string {
 export async function generateCategoryInsight(
   category: string,
   score: number,
-  categoryAnswers: Array<{ question: any; answer: AssessmentAnswer }>
+  answers: Record<string, AssessmentAnswer>
 ): Promise<string> {
-  const prompt = `
-Analyze this specific category from a Value Builder Assessment:
-
-Category: ${category}
-Score: ${score}/100
-
-Detailed Answers:
-${categoryAnswers
-  .map(({ question, answer }) => {
-    const selectedOption = question.options.find((opt: any) => opt.points === answer.points);
-    return `- ${question.title}: "${selectedOption?.text}"`;
-  })
-  .join('\n')}
-
-Provide:
-1. A brief analysis of what this score means for the business
-2. Specific risks or opportunities based on the answers
-3. 2-3 actionable recommendations to improve this area
-
-Keep response under 200 words and be specific to the actual answers given.
-`;
-
   try {
+    const categoryAnswers = Object.entries(answers)
+      .filter(([id]) => {
+        const q = questions.find((ques) => ques.id === id);
+        return q?.section === category;
+      })
+      .map(([id, ans]) => {
+        const question = questions.find((q) => q.id === id)!;
+        const selected = question.options.find((o: any) => o.points === ans.points);
+        return `- ${question.title}: "${selected?.text}"`;
+      })
+      .join('\n');
+
+    const prompt = `Generate a brief, actionable analysis for the ${category} category with a score of ${score}/100.\n\nDetailed Answers:\n${categoryAnswers}`;
+
     const completion = await openai.chat.completions.create({
       model: AI_MODEL,
       messages: [
-        {
-          role: 'system',
-          content: 'You are a business valuation expert. Provide concise, specific insights.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: 'system', content: 'You are a business valuation expert. Provide concise, specific insights.' },
+        { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 300,
+      max_tokens: 300
     });
 
-    return completion.choices[0].message.content || '';
+    const analysis = completion.choices[0].message.content || '';
+    return analysis.replace(/\*\*/g, '').replace(/\n\n+/g, '\n').trim();
   } catch (error) {
-    console.error('OpenAI API error for category insight:', error);
-    console.error('Model used:', AI_MODEL);
-    return '';
+    console.error('AI generation failed:', error);
+    return generateFallbackAnalysis(category, score);
+  }
+}
+
+export function generateFallbackAnalysis(category: string, score: number): string {
+  const categoryName = getCategoryDetails(category).title;
+
+  if (score < 40) {
+    return `A ${categoryName} score of ${score}/100 indicates significant challenges in this area. This low score suggests fundamental issues that need immediate attention. The business should prioritize improvements here as this weakness could be limiting overall value and growth potential.\n\nKey risks include operational inefficiencies, competitive disadvantages, and potential barriers to scaling. However, addressing these issues systematically can lead to substantial improvements in business value.`;
+  } else if (score < 60) {
+    return `With a ${categoryName} score of ${score}/100, there are clear opportunities for improvement. While some foundational elements may be in place, significant gaps remain that could impact business value and attractiveness to buyers.\n\nThe current performance suggests inconsistent processes or partial implementation of best practices. Focusing on systematic improvements in this area could yield meaningful value enhancement within 12-18 months.`;
+  } else {
+    return `A ${categoryName} score of ${score}/100 shows moderate performance with room for optimization. The business has established basic competencies but hasn't fully capitalized on opportunities in this area.\n\nBy refining existing processes and implementing industry best practices, the business can strengthen this driver and enhance overall value. Quick wins may be available through targeted improvements.`;
   }
 }
