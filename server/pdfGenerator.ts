@@ -140,7 +140,14 @@ function drawScoreGauge(
 
   doc.circle(centerX, centerY, radius - 20).fillColor('white').fill();
 
-  const angle = 180 + (score / 100) * 180;
+  let angle;
+  if (score < 45) {
+    angle = 180 + (score / 45) * 45;
+  } else if (score < 80) {
+    angle = 225 + ((score - 45) / 35) * 90;
+  } else {
+    angle = 315 + ((score - 80) / 20) * 45;
+  }
   const needleLength = radius - 25;
   const needleX = centerX + needleLength * Math.cos((angle * Math.PI) / 180);
   const needleY = centerY + needleLength * Math.sin((angle * Math.PI) / 180);
@@ -215,7 +222,7 @@ async function drawAIInsights(
       });
     }
 
-    currentY = doc.y + 8;
+    currentY = doc.y + 12;
   }
 
   return currentY - startY;
@@ -240,9 +247,9 @@ async function drawPriorityAreas(
     const recommendation = getImprovementRecommendation(category, score.score);
     doc.fillColor('black').fontSize(10).text(recommendation, margins.left, currentY, {
       width: maxWidth,
-      lineGap: 2
+      lineGap: 3
     });
-    currentY = doc.y + 15;
+    currentY = doc.y + 20;
   }
 
   return currentY - startY;
@@ -721,7 +728,7 @@ function getStrategicRecommendations(
 
 function getScoreColor(score: number): string {
   if (score >= 80) return '#10b981';
-  if (score >= 60) return '#f59e0b';
+  if (score >= 45) return '#f59e0b';
   return '#ef4444';
 }
 
