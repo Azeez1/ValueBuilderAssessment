@@ -34,14 +34,17 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
       margin: 0;
-      padding: 40px;
+      padding: 20px;
       color: #111827;
       line-height: 1.6;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .container {
-      max-width: 800px;
+      max-width: 900px;
       margin: 0 auto;
+      padding: 0 10px;
     }
 
     h1, h2, h3, h4 {
@@ -293,10 +296,21 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     .ai-content {
       color: #1e293b;
       line-height: 1.7;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .ai-content p {
       margin: 10px 0;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .ai-content h4 {
+      color: #1e40af;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 20px 0 10px 0;
     }
 
     .ai-content h5 {
@@ -306,23 +320,38 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       margin: 15px 0 8px 0;
     }
 
+    .ai-content strong {
+      color: #1e40af;
+      font-weight: 600;
+    }
+
     .ai-content li {
-      margin: 6px 0;
+      margin: 8px 0;
       padding-left: 20px;
       position: relative;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .ai-content li:before {
-      content: "→";
+      content: "•";
       position: absolute;
       left: 0;
       color: #1e40af;
+      font-weight: bold;
     }
 
     /* Print-specific styles */
     @media print {
       body {
         margin: 0;
+        padding: 15mm;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .container {
+        max-width: none;
         padding: 0;
       }
 
@@ -332,10 +361,46 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
 
       .category-detail {
         page-break-inside: avoid;
+        margin: 20px 0;
       }
 
       .new-page {
         page-break-before: always;
+      }
+
+      .score-number {
+        font-size: 48px;
+      }
+
+      .grade {
+        font-size: 24px;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+      }
+
+      .ai-insights,
+      .priority-areas {
+        page-break-inside: avoid;
+      }
+
+      .ai-content h4 {
+        font-size: 14px;
+      }
+
+      .ai-content p {
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .large-score .score-value {
+        font-size: 36px;
+      }
+
+      .large-score .score-total {
+        font-size: 24px;
       }
     }
   </style>
@@ -431,18 +496,26 @@ function renderCategoryScores(scores: Record<string, CategoryScore>, categories:
 
 // Helper function to format AI insights
 function formatAIInsights(insights: string): string {
-  // Convert markdown-style formatting to HTML
+  // Clean up markdown-style formatting and convert to HTML
   return insights
+    .replace(/###\s*/g, '') // Remove ### headers
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
     .split('\n')
     .map(line => {
-      if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
-        return `<h3>${line.replace(/\*\*/g, '')}</h3>`;
-      } else if (line.trim().startsWith('-') || line.trim().match(/^\d+\./)) {
-        return `<li>${line.replace(/^[-\d+\.]\s*/, '')}</li>`;
-      } else if (line.trim()) {
-        return `<p>${line}</p>`;
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      
+      // Remove markdown list markers
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        return `<li>${trimmed.substring(2)}</li>`;
+      } else if (trimmed.match(/^\d+\.\s/)) {
+        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
+      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
+        return `<h4>${trimmed}</h4>`;
+      } else {
+        return `<p>${trimmed}</p>`;
       }
-      return '';
     })
     .join('\n');
 }
@@ -547,16 +620,30 @@ function renderSingleCategory(category: string, score: CategoryScore): string {
 }
 
 function formatAnalysisContent(analysis: string): string {
-  return analysis
+  // Clean up markdown formatting
+  const cleaned = analysis
+    .replace(/###\s*/g, '') // Remove ### headers
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
+    .replace(/\.-\s*/g, '') // Remove .- marks
+    .replace(/^-+\s*/gm, '') // Remove leading dashes
+
+  return cleaned
     .split('\n')
     .filter(p => p.trim())
     .map(p => {
-      if (p.trim().startsWith('-') || p.trim().match(/^\d+\./)) {
-        return `<li>${p.replace(/^[-\d+\.]+\s*/, '')}</li>`;
-      } else if (p.match(/^[A-Z].*:\s*$/)) {
-        return `<h5>${p}</h5>`;
+      const trimmed = p.trim();
+      if (!trimmed) return '';
+      
+      // Handle list items
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        return `<li>${trimmed.substring(2)}</li>`;
+      } else if (trimmed.match(/^\d+\.\s/)) {
+        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
+      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
+        return `<h5>${trimmed}</h5>`;
       } else {
-        return `<p>${p}</p>`;
+        return `<p>${trimmed}</p>`;
       }
     })
     .join('\n');

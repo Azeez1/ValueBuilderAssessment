@@ -280,10 +280,17 @@ async function sendResultEmail(resultData: any) {
 
   console.log('Preparing HTML report for email...');
 
+  // Create file attachments
+  const htmlAttachment = {
+    filename: `ValueBuilder_Report_${sessionId}_${Date.now()}.html`,
+    content: html,
+    contentType: 'text/html'
+  };
+
   const emailContent = `
       <h2>Value Builder Assessment Completed</h2>
       <p>Dear ${userName},</p>
-      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is included below.</p>
+      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached to this email.</p>
       <p><strong>Your Overall Score: ${overallScore}/100</strong></p>
       <p>Your report includes:</p>
       <ul>
@@ -292,9 +299,11 @@ async function sendResultEmail(resultData: any) {
         <li>Strategic recommendations</li>
         <li>Performance analysis</li>
       </ul>
-      <hr style="margin: 30px 0;">
-      ${html}
-      <hr style="margin: 30px 0;">
+      <p><strong>Attached Files:</strong></p>
+      <ul>
+        <li><strong>HTML Report</strong> - View in your browser or save for future reference</li>
+        <li>You can also print the HTML report to PDF using your browser's print function</li>
+      </ul>
       <p>Best regards,<br>Value Builder Assessment Team</p>
     `;
 
@@ -315,6 +324,7 @@ async function sendResultEmail(resultData: any) {
       to: userEmail,
       subject: "Your Value Builder Assessment Results",
       html: emailContent,
+      attachments: [htmlAttachment]
     });
     console.log('Email sent to user successfully:', userMailInfo.messageId);
 
@@ -325,6 +335,7 @@ async function sendResultEmail(resultData: any) {
       to: smtpUser,
       subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
       html: emailContent,
+      attachments: [htmlAttachment]
     });
     console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
