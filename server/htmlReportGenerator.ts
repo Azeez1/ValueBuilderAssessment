@@ -151,7 +151,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-radius: 3px;
       margin: 0 15px;
       position: relative;
-      overflow: hidden;
     }
 
     .score-bar-fill {
@@ -173,6 +172,8 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-left: 4px solid #1e40af;
       padding: 20px;
       margin: 40px 0;
+      height: auto;
+      min-height: 100px;
     }
 
     .priority-areas {
@@ -180,6 +181,7 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-left: 4px solid #ef4444;
       padding: 20px;
       margin: 40px 0;
+      height: auto;
     }
 
     .priority-item {
@@ -197,6 +199,8 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       page-break-inside: avoid;
+      height: auto;
+      min-height: 200px;
     }
 
     .category-header {
@@ -299,6 +303,8 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       padding: 20px;
       margin-top: 30px;
       border-radius: 0 8px 8px 0;
+      height: auto;
+      min-height: 100px;
     }
 
     .ai-content {
@@ -366,6 +372,22 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       font-weight: 500;
       word-wrap: break-word;
       overflow-wrap: break-word;
+    }
+
+    .ai-list {
+      margin: 10px 0;
+      padding: 0;
+    }
+
+    /* Ensure all content sections are visible */
+    section, div {
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    .container {
+      height: auto !important;
+      overflow: visible !important;
     }
 
     /* Print-specific styles */
@@ -555,33 +577,67 @@ function formatAIInsights(insights: string): string {
     .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove excessive line breaks
     .trim();
 
-  return cleaned
-    .split('\n')
-    .map(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return '';
-      
-      // Handle section headers (lines ending with colon)
-      if (trimmed.endsWith(':') && trimmed.length < 80) {
-        return `<h4>${trimmed}</h4>`;
+  // Split into sections and process each line
+  const lines = cleaned.split('\n');
+  let formatted: string[] = [];
+  let inList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    if (!trimmed) {
+      if (inList) {
+        formatted.push('</div>'); // Close list container
+        inList = false;
       }
-      // Handle bullet points - don't add extra <li> tags, just style them
-      else if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        const cleanText = trimmed.replace(/^[•\-\*]\s*/, '');
-        return `<div class="bullet-point">• ${cleanText}</div>`;
+      formatted.push('<br>');
+      continue;
+    }
+    
+    // Handle section headers (lines ending with colon)
+    if (trimmed.endsWith(':') && trimmed.length < 80 && !trimmed.startsWith('•')) {
+      if (inList) {
+        formatted.push('</div>');
+        inList = false;
       }
-      // Handle numbered lists
-      else if (trimmed.match(/^\d+\.\s/)) {
-        const cleanText = trimmed.replace(/^\d+\.\s*/, '');
-        const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
-        return `<div class="numbered-point">${num}. ${cleanText}</div>`;
+      formatted.push(`<h4>${trimmed}</h4>`);
+    }
+    // Handle bullet points - avoid double bullets
+    else if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!inList) {
+        formatted.push('<div class="ai-list">');
+        inList = true;
       }
-      // Regular paragraphs
-      else {
-        return `<p>${trimmed}</p>`;
+      const cleanText = trimmed.replace(/^[•\-\*]\s*/, '').replace(/^•\s*/, ''); // Remove any leading bullets
+      formatted.push(`<div class="bullet-point">• ${cleanText}</div>`);
+    }
+    // Handle numbered lists
+    else if (trimmed.match(/^\d+\.\s/)) {
+      if (!inList) {
+        formatted.push('<div class="ai-list">');
+        inList = true;
       }
-    })
-    .join('\n');
+      const cleanText = trimmed.replace(/^\d+\.\s*/, '');
+      const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
+      formatted.push(`<div class="numbered-point"><strong>${num}.</strong> ${cleanText}</div>`);
+    }
+    // Regular paragraphs
+    else {
+      if (inList) {
+        formatted.push('</div>');
+        inList = false;
+      }
+      formatted.push(`<p>${trimmed}</p>`);
+    }
+  }
+
+  // Close any open list
+  if (inList) {
+    formatted.push('</div>');
+  }
+
+  return `<div class="ai-content">${formatted.join('\n')}</div>`;
 }
 
 // Helper function to render priority areas
