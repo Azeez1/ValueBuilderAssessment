@@ -127,25 +127,28 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     .category-score {
       display: flex;
       align-items: center;
-      margin: 15px 0;
-      padding: 15px;
+      justify-content: space-between;
+      margin: 10px 0;
+      padding: 12px 15px;
       background: #f9fafb;
-      border-radius: 8px;
+      border-radius: 6px;
+      white-space: nowrap;
     }
 
     .category-name {
-      flex: 1;
+      flex: 0 0 180px;
       font-weight: 500;
-      font-size: 14px;
+      font-size: 13px;
       color: #374151;
-      min-width: 240px;
+      text-align: left;
     }
 
     .score-bar {
-      width: 100px;
-      height: 8px;
+      flex: 1;
+      max-width: 120px;
+      height: 6px;
       background: #e5e7eb;
-      border-radius: 4px;
+      border-radius: 3px;
       margin: 0 15px;
       position: relative;
       overflow: hidden;
@@ -153,15 +156,16 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
 
     .score-bar-fill {
       height: 100%;
-      border-radius: 4px;
+      border-radius: 3px;
       transition: width 0.3s ease;
     }
 
     .score-value {
-      font-weight: bold;
-      font-size: 16px;
-      text-align: right;
-      width: 50px;
+      flex: 0 0 30px;
+      font-weight: 600;
+      font-size: 14px;
+      text-align: center;
+      color: #374151;
     }
 
     .ai-insights {
@@ -408,21 +412,24 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       }
 
       .category-score {
-        padding: 12px 15px;
-        margin: 8px 0;
+        padding: 10px 12px;
+        margin: 6px 0;
       }
 
       .category-name {
-        font-size: 12px;
+        flex: 0 0 150px;
+        font-size: 11px;
       }
 
       .score-bar {
-        width: 80px;
-        margin: 0 12px;
+        max-width: 100px;
+        margin: 0 10px;
+        height: 5px;
       }
 
       .score-value {
-        font-size: 14px;
+        flex: 0 0 25px;
+        font-size: 12px;
       }
     }
   </style>
