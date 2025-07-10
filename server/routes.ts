@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer, type CategoryScore } from "@shared/schema";
-import { generatePDFReport } from "./pdfGenerator";
+
 import { generateHTMLReport } from "./htmlReportGenerator";
 import { generateAIInsights, generateCategoryInsight, generateFallbackAnalysis } from "./openaiService";
 import { calculateCategoryScores, calculateOverallScore } from "../client/src/lib/scoring";
@@ -238,43 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export HTML report as PDF
-  app.get("/api/reports/export/pdf/:sessionId", async (req, res) => {
-    try {
-      const { sessionId } = req.params;
-      const assessment = await storage.getAssessmentBySessionId(sessionId);
-      if (!assessment || !assessment.categoryScores) {
-        return res.status(404).json({ error: "Assessment not found" });
-      }
 
-      const overall = assessment.totalScore || 0;
-      const insights = await generateAIInsights(
-        assessment.answers,
-        assessment.categoryScores,
-        overall,
-        req.query.companyName as string | undefined,
-        req.query.industry as string | undefined
-      );
-
-      const pdfBuffer = await generatePDFReport(
-        (req.query.userName as string) || "User",
-        (req.query.userEmail as string) || "",
-        (req.query.companyName as string) || "Your Company",
-        (req.query.industry as string) || "General",
-        overall,
-        assessment.categoryScores,
-        assessment.answers || {}
-      );
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="ValueBuilder_Report_${sessionId}.pdf"`
-      );
-      res.send(pdfBuffer);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to export PDF" });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;
@@ -314,30 +278,23 @@ async function sendResultEmail(resultData: any) {
     aiInsights: insights,
   });
 
-  console.log('Generating PDF for email...');
-  const pdfBuffer = await generatePDFReport(
-    userName,
-    userEmail || "",
-    companyName || "Your Company", 
-    industry || "General",
-    overallScore,
-    categoryBreakdown,
-    answers
-  );
-  console.log('PDF generated successfully');
+  console.log('Preparing HTML report for email...');
 
   const emailContent = `
       <h2>Value Builder Assessment Completed</h2>
       <p>Dear ${userName},</p>
-      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached to this email.</p>
+      <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is included below.</p>
       <p><strong>Your Overall Score: ${overallScore}/100</strong></p>
-      <p>The attached PDF contains:</p>
+      <p>Your report includes:</p>
       <ul>
         <li>Detailed breakdown of all 14 assessment categories</li>
         <li>Priority areas for improvement</li>
         <li>Strategic recommendations</li>
         <li>Performance analysis</li>
       </ul>
+      <hr style="margin: 30px 0;">
+      ${html}
+      <hr style="margin: 30px 0;">
       <p>Best regards,<br>Value Builder Assessment Team</p>
     `;
 
@@ -357,7 +314,6 @@ async function sendResultEmail(resultData: any) {
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: userEmail,
       subject: "Your Value Builder Assessment Results",
-      attachments: [{ filename: "ValueBuilderReport.pdf", content: pdfBuffer }],
       html: emailContent,
     });
     console.log('Email sent to user successfully:', userMailInfo.messageId);
@@ -368,7 +324,6 @@ async function sendResultEmail(resultData: any) {
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: smtpUser,
       subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
-      attachments: [{ filename: "ValueBuilderReport.pdf", content: pdfBuffer }],
       html: emailContent,
     });
     console.log('Email sent to admin successfully:', adminMailInfo.messageId);

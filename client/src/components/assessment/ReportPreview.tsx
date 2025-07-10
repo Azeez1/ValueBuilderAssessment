@@ -44,14 +44,37 @@ export default function ReportPreview({
   });
 
   const handleExportPdf = () => {
-    const params = new URLSearchParams();
-    if (userName) params.append("userName", userName);
-    if (companyName) params.append("companyName", companyName);
-    if (industry) params.append("industry", industry);
-    window.open(
-      `/api/reports/export/pdf/${sessionId}?${params.toString()}`,
-      "_blank"
-    );
+    // Get the iframe content
+    const iframe = document.querySelector('iframe[title="Assessment Report Preview"]') as HTMLIFrameElement;
+    if (!iframe || !iframe.contentDocument) {
+      alert('Report not ready for download. Please wait for it to load completely.');
+      return;
+    }
+
+    // Create a new window with the report content
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to download the PDF');
+      return;
+    }
+
+    // Get the HTML content from the iframe
+    const htmlContent = iframe.contentDocument.documentElement.outerHTML;
+    
+    // Write the content to the new window
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Wait for content to load, then trigger print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        // Close the window after printing (user can cancel print and window stays open)
+        printWindow.onafterprint = () => {
+          printWindow.close();
+        };
+      }, 500);
+    };
   };
 
   return (
