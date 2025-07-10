@@ -142,11 +142,11 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     }
 
     .score-bar {
-      width: 150px;
+      width: 100px;
       height: 8px;
       background: #e5e7eb;
       border-radius: 4px;
-      margin: 0 20px;
+      margin: 0 15px;
       position: relative;
       overflow: hidden;
     }
@@ -417,8 +417,8 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       }
 
       .score-bar {
-        width: 120px;
-        margin: 0 15px;
+        width: 80px;
+        margin: 0 12px;
       }
 
       .score-value {
