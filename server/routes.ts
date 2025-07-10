@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
-import { generatePDFReport } from "./pdfGenerator";
+import { convertHTMLToPDF } from "./htmlToPdfBridge";
 import { generateHTMLReport } from "./htmlReportGenerator";
 import { generateAIInsights } from "./openaiService";
 import { z } from "zod";
@@ -189,17 +189,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.query.industry as string | undefined
       );
 
-      const pdf = await generatePDFReport(
-        (req.query.userName as string) || "User",
-        (req.query.userEmail as string) || "",
-        req.query.companyName as string || "",
-        req.query.industry as string || "",
-        overall,
-        assessment.categoryScores,
-        assessment.answers as Record<string, AssessmentAnswer>
-      );
+      const html = await generateHTMLReport({
+        userName: (req.query.userName as string) || "User",
+        userEmail: (req.query.userEmail as string) || "",
+        companyName: req.query.companyName as string | undefined,
+        industry: req.query.industry as string | undefined,
+        overallScore: overall,
+        categoryScores: assessment.categoryScores,
+        aiInsights: insights,
+      });
+
+      const pdfBuffer = await convertHTMLToPDF(html);
       res.setHeader("Content-Type", "application/pdf");
-      res.send(pdf);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="ValueBuilder_Report_${sessionId}.pdf"`
+      );
+      res.send(pdfBuffer);
     } catch (error) {
       res.status(500).json({ error: "Failed to export PDF" });
     }
@@ -224,16 +230,27 @@ async function sendResultEmail(resultData: any) {
   const assessment = await storage.getAssessmentBySessionId(sessionId);
   const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
 
-  console.log('Generating PDF report...');
-  const pdfBuffer = await generatePDFReport(
-  userName,
-  userEmail,
-  companyName,
-  industry,
-  overallScore,
-  categoryBreakdown,
-  answers
+  // Generate AI insights and HTML then convert to PDF
+  const insights = await generateAIInsights(
+    answers,
+    categoryBreakdown,
+    overallScore,
+    companyName,
+    industry
   );
+
+  const html = await generateHTMLReport({
+    userName,
+    userEmail,
+    companyName,
+    industry,
+    overallScore,
+    categoryScores: categoryBreakdown,
+    aiInsights: insights,
+  });
+
+  console.log('Converting HTML to PDF for email...');
+  const pdfBuffer = await convertHTMLToPDF(html);
   console.log('PDF generated successfully');
 
   const emailContent = `
