@@ -1,5 +1,5 @@
 import { db, initializeDatabase } from './db';
-import { assessments, results, type Assessment, type InsertAssessment, type UpdateAssessment, type Result, type InsertResult } from '@shared/schema';
+import { assessments, results, type Assessment, type InsertAssessment, type UpdateAssessment, type Result, type InsertResult, type CategoryScore } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 export interface IStorage {
@@ -15,8 +15,8 @@ export interface IStorage {
 export interface InsightCache {
   sessionId: string;
   insights: string;
-  categoryInsights: Record<string, string>;
-  createdAt: Date;
+  categoryScores: Record<string, CategoryScore>;
+  overallScore: number;
 }
 
 export class SQLiteStorage implements IStorage {
@@ -118,14 +118,35 @@ export class SQLiteStorage implements IStorage {
   }
 
   async cacheInsights(sessionId: string, insights: InsightCache): Promise<void> {
-    // Placeholder implementation for caching
-    console.log(`Caching insights for session ${sessionId}`);
+    const existing = await this.getAssessmentBySessionId(sessionId);
+    if (existing) {
+      await this.updateAssessment(sessionId, {
+        categoryScores: existing.categoryScores,
+        totalScore: existing.totalScore,
+      });
+
+      this.insightCache.set(sessionId, {
+        ...insights,
+        createdAt: new Date(),
+      });
+      console.log(`Cached insights for session ${sessionId}`);
+    }
   }
 
   async getCachedInsights(sessionId: string): Promise<InsightCache | null> {
-    console.log(`Retrieving cached insights for session ${sessionId}`);
+    const cached = this.insightCache.get(sessionId);
+    if (cached) {
+      const ageInMinutes = (Date.now() - cached.createdAt.getTime()) / 1000 / 60;
+      if (ageInMinutes < 30) {
+        console.log(`Using cached insights for session ${sessionId}`);
+        const { createdAt, ...rest } = cached;
+        return rest;
+      }
+    }
     return null;
   }
+
+  private insightCache = new Map<string, InsightCache & { createdAt: Date }>();
 }
 
 export const storage = new SQLiteStorage();
