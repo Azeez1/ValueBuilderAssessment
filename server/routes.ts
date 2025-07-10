@@ -1,10 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer } from "@shared/schema";
+import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer, type CategoryScore } from "@shared/schema";
 import { convertHTMLToPDF } from "./htmlToPdfBridge";
 import { generateHTMLReport } from "./htmlReportGenerator";
-import { generateAIInsights } from "./openaiService";
+import { generateAIInsights, generateCategoryInsight, generateFallbackAnalysis } from "./openaiService";
+import { calculateCategoryScores, calculateOverallScore } from "../client/src/lib/scoring";
 import { z } from "zod";
 import nodemailer from "nodemailer";
 
@@ -137,37 +138,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // HTML report preview
+  // HTML report preview with full AI analysis
   app.get("/api/reports/preview/:sessionId", async (req, res) => {
     try {
       const { sessionId } = req.params;
+
+      // Try cached insights first
+      const cached = await storage.getCachedInsights(sessionId);
+      if (cached) {
+        const html = await generateHTMLReport({
+          userName: (req.query.userName as string) || "User",
+          userEmail: (req.query.userEmail as string) || "",
+          companyName: req.query.companyName as string | undefined,
+          industry: req.query.industry as string | undefined,
+          overallScore: cached.overallScore,
+          categoryScores: cached.categoryScores,
+          aiInsights: cached.insights,
+        });
+
+        res.setHeader("Content-Type", "text/html");
+        res.setHeader("Cache-Control", "private, max-age=300");
+        return res.send(html);
+      }
+
       const assessment = await storage.getAssessmentBySessionId(sessionId);
-      if (!assessment || !assessment.categoryScores) {
+
+      if (!assessment || !assessment.answers) {
         return res.status(404).json({ error: "Assessment not found" });
       }
 
-      const overall = assessment.totalScore || 0;
-      const insights = await generateAIInsights(
+      const categoryScores =
+        assessment.categoryScores || calculateCategoryScores(assessment.answers);
+      const overallScore =
+        assessment.totalScore || calculateOverallScore(categoryScores);
+
+      console.log("Generating executive AI insights...");
+      const executiveInsights = await generateAIInsights(
         assessment.answers,
-        assessment.categoryScores,
-        overall,
+        categoryScores,
+        overallScore,
         req.query.companyName as string | undefined,
         req.query.industry as string | undefined
       );
 
+      console.log("Generating category-specific insights...");
+      const enhancedCategoryScores: Record<string, CategoryScore> = { ...categoryScores };
+
+      for (const [category, score] of Object.entries(categoryScores)) {
+        if (score.score < 80) {
+          console.log(`Generating AI analysis for ${category} (score: ${score.score})...`);
+          try {
+            const categoryInsight = await generateCategoryInsight(
+              category,
+              score.score,
+              assessment.answers
+            );
+            enhancedCategoryScores[category] = {
+              ...score,
+              analysis: categoryInsight,
+            };
+          } catch (err) {
+            console.error(`Failed to generate insight for ${category}:`, err);
+            enhancedCategoryScores[category] = {
+              ...score,
+              analysis: generateFallbackAnalysis(category, score.score),
+            };
+          }
+        }
+      }
+
+      // Cache for future use
+      await storage.updateAssessment(sessionId, {
+        categoryScores: enhancedCategoryScores,
+        totalScore: overallScore,
+      });
+
+      await storage.cacheInsights(sessionId, {
+        sessionId,
+        insights: executiveInsights,
+        categoryScores: enhancedCategoryScores,
+        overallScore,
+      });
+
       const html = await generateHTMLReport({
         userName: (req.query.userName as string) || "User",
+        userEmail: (req.query.userEmail as string) || "",
         companyName: req.query.companyName as string | undefined,
         industry: req.query.industry as string | undefined,
-        overallScore: overall,
-        categoryScores: assessment.categoryScores,
-        aiInsights: insights,
+        overallScore,
+        categoryScores: enhancedCategoryScores,
+        aiInsights: executiveInsights,
       });
 
       res.setHeader("Content-Type", "text/html");
       res.send(html);
     } catch (error) {
-      res.status(500).json({ error: "Failed to generate preview" });
+      console.error('Report preview error:', error);
+      res.status(500).json({ error: "Failed to generate report preview" });
     }
   });
 

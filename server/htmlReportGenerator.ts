@@ -179,6 +179,146 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       color: #ef4444;
     }
 
+    .category-detail {
+      margin: 40px 0;
+      padding: 30px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      page-break-inside: avoid;
+    }
+
+    .category-header {
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+
+    .category-meta {
+      margin-top: 8px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .score-section {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      margin: 30px 0;
+    }
+
+    .large-score {
+      font-size: 48px;
+      font-weight: bold;
+    }
+
+    .score-value {
+      font-size: 64px;
+    }
+
+    .score-total {
+      font-size: 32px;
+      color: #6b7280;
+    }
+
+    .score-visualization {
+      flex: 1;
+    }
+
+    .score-bar.large {
+      height: 20px;
+      margin: 10px 0;
+    }
+
+    .score-label {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .category-content {
+      margin-top: 30px;
+    }
+
+    .description {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #374151;
+      margin-bottom: 30px;
+    }
+
+    .insights-section,
+    .recommendations-section,
+    .ai-analysis-section {
+      margin: 25px 0;
+    }
+
+    .insights-section h4,
+    .recommendations-section h4,
+    .ai-analysis-section h4 {
+      color: #1e40af;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .insights-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .insights-list li {
+      position: relative;
+      padding-left: 24px;
+      margin: 8px 0;
+      color: #374151;
+    }
+
+    .insights-list li:before {
+      content: "•";
+      position: absolute;
+      left: 8px;
+      color: #1e40af;
+      font-weight: bold;
+    }
+
+    .ai-analysis-section {
+      background: #f0f9ff;
+      border-left: 4px solid #1e40af;
+      padding: 20px;
+      margin-top: 30px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .ai-content {
+      color: #1e293b;
+      line-height: 1.7;
+    }
+
+    .ai-content p {
+      margin: 10px 0;
+    }
+
+    .ai-content h5 {
+      color: #1e40af;
+      font-size: 14px;
+      font-weight: 600;
+      margin: 15px 0 8px 0;
+    }
+
+    .ai-content li {
+      margin: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .ai-content li:before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: #1e40af;
+    }
+
     /* Print-specific styles */
     @media print {
       body {
@@ -330,38 +470,103 @@ function renderPriorityAreas(scores: Record<string, CategoryScore>): string {
 
 // Helper function to render detailed categories
 function renderDetailedCategories(scores: Record<string, CategoryScore>): string {
-  return Object.entries(scores)
-    .map(([category, score]) => {
-      const details = getCategoryDetails(category);
-      if (!details) return '';
+  const coreCategories = coreDrivers.filter(cat => scores[cat]);
+  const supplementalCategories = supplementalDrivers.filter(cat => scores[cat]);
 
-      return `
-        <div class="category-detail" data-category="${category}">
-          <h3>${details.title}</h3>
-          <div class="score-display">
-            <span class="score-number" style="font-size: 48px; color: ${getScoreColor(score.score)};">
-              ${score.score}/100
-            </span>
+  let html = '';
+
+  if (coreCategories.length > 0) {
+    html += '<h3>Part I: Core Value Builder Drivers - Detailed Analysis</h3>';
+    html += coreCategories.map(cat => renderSingleCategory(cat, scores[cat])).join('');
+  }
+
+  if (supplementalCategories.length > 0) {
+    html += '<h3 class="new-page">Part II: Supplemental Deep-Dive - Detailed Analysis</h3>';
+    html += supplementalCategories.map(cat => renderSingleCategory(cat, scores[cat])).join('');
+  }
+
+  return html;
+}
+
+function renderSingleCategory(category: string, score: CategoryScore): string {
+  const details = getCategoryDetails(category);
+  if (!details) return '';
+
+  const hasAI = score.analysis && score.score < 80;
+  const color = getScoreColor(score.score);
+
+  return `
+    <div class="category-detail" data-category="${category}">
+      <div class="category-header">
+        <h3>${details.title}</h3>
+        <div class="category-meta">
+          <span class="category-subtitle">${details.subtitle}</span>
+        </div>
+      </div>
+
+      <div class="score-section">
+        <div class="large-score">
+          <span class="score-value" style="color: ${color};">${score.score}</span>
+          <span class="score-total">/100</span>
+        </div>
+
+        <div class="score-visualization">
+          <div class="score-bar large">
+            <div class="score-bar-fill" style="width: ${score.score}%; background-color: ${color};"></div>
           </div>
-          <p><strong>${details.subtitle}</strong></p>
-          <p>${details.description}</p>
+          <span class="score-label">${getScoreLabel(score.score)}</span>
+        </div>
+      </div>
 
+      <div class="category-content">
+        <p class="description">${details.description}</p>
+
+        <div class="insights-section">
           <h4>Key Assessment Areas:</h4>
-          <ul>
-            ${details.insights.map((insight: string) => `<li>${insight}</li>`).join('')}
+          <ul class="insights-list">
+            ${details.insights.map((ins: string) => `<li>${ins}</li>`).join('')}
           </ul>
+        </div>
 
+        <div class="recommendations-section">
           <h4>Improvement Opportunities:</h4>
           <p>${getImprovementRecommendation(category, score.score)}</p>
-
-          ${score.analysis ? `
-            <h4>Analysis:</h4>
-            <p>${score.analysis}</p>
-          ` : ''}
         </div>
-      `;
+
+        ${hasAI ? `
+          <div class="ai-analysis-section">
+            <h4>AI-Powered Analysis:</h4>
+            <div class="ai-content">
+              ${formatAnalysisContent(score.analysis!)}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function formatAnalysisContent(analysis: string): string {
+  return analysis
+    .split('\n')
+    .filter(p => p.trim())
+    .map(p => {
+      if (p.trim().startsWith('-') || p.trim().match(/^\d+\./)) {
+        return `<li>${p.replace(/^[-\d+\.]+\s*/, '')}</li>`;
+      } else if (p.match(/^[A-Z].*:\s*$/)) {
+        return `<h5>${p}</h5>`;
+      } else {
+        return `<p>${p}</p>`;
+      }
     })
-    .join('');
+    .join('\n');
+}
+
+function getScoreLabel(score: number): string {
+  if (score >= 80) return 'Excellent';
+  if (score >= 60) return 'Good';
+  if (score >= 40) return 'Needs Improvement';
+  return 'Critical';
 }
 
 function getGrade(score: number): string {
