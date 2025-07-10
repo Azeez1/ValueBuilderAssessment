@@ -393,64 +393,6 @@ function drawCategoryBar(
   return ROW_HEIGHT + 10;
 }
 
-function generateCategoryDetailPage(
-  doc: PDFKit.PDFDocument,
-  category: string,
-  score: CategoryScore,
-  isCore: boolean
-) {
-  doc.addPage();
-  const descriptions = isCore ? coreDriverDescriptions : supplementalDriverDescriptions;
-  const details = (descriptions as Record<string, any>)[category];
-
-  if (!details) return;
-
-  drawScoreGauge(doc, 350, 50, score.score);
-
-  doc.fontSize(24).fillColor('#1e40af').text(details.title, 50, 50, { width: 280 });
-
-  doc.fontSize(12).fillColor('#6b7280').text(details.subtitle, 50, 80, { width: 280, lineGap: 3 });
-
-  doc.fontSize(48).fillColor(getScoreColor(score.score)).text(`${score.score}`, 50, 120, {
-    width: 100,
-    align: 'center'
-  });
-  doc.fontSize(16).fillColor('#6b7280').text('/100', 150, 135);
-
-  doc
-    .fontSize(11)
-    .fillColor('#111827')
-    .text(details.description, 50, 200, {
-      width: 500,
-      align: 'justify',
-      lineGap: 4
-    });
-
-  let currentY = doc.y + 20;
-  doc.fontSize(14).fillColor('#1e40af').text('Key Assessment Areas:', 50, currentY);
-
-  currentY += 20;
-  details.insights.forEach((insight: string) => {
-    doc.fontSize(10).fillColor('#374151').text(`• ${insight}`, 70, currentY, {
-      width: 480,
-      lineGap: 3
-    });
-    currentY = doc.y + 8;
-  });
-
-  if (score.score < 60) {
-    currentY += 15;
-    doc.fontSize(14).fillColor('#dc2626').text('Improvement Opportunities:', 50, currentY);
-
-    currentY += 15;
-    const recommendations = getImprovementRecommendation(category, score.score);
-    doc.fontSize(10).fillColor('#374151').text(recommendations, 50, currentY, {
-      width: 500,
-      align: 'justify',
-      lineGap: 4
-    });
-  }
-}
 
 async function drawCategoryDetail(
   doc: PDFKit.PDFDocument,
@@ -779,44 +721,11 @@ function getImprovementRecommendation(category: string, score: number): string {
   return recommendations[category] || 'Focus on systematic improvements in this area to increase business value.';
 }
 
-function getStrategicRecommendations(
-  overallScore: number,
-  categoryScores: Record<string, CategoryScore>
-): string[] {
-  const items: string[] = [];
-
-  if (overallScore < 60) {
-    items.push('Your business has significant opportunities for value improvement. Focus on the lowest-scoring areas first.');
-    items.push('Consider engaging a business advisor to help develop a comprehensive improvement plan.');
-  } else if (overallScore < 80) {
-    items.push('Your business shows good potential. Targeted improvements in key areas can significantly increase value.');
-    items.push('Prioritize 2-3 improvement areas and develop 90-day action plans for each.');
-  } else {
-    items.push('Your business is performing well. Focus on maintaining strengths while addressing any remaining gaps.');
-    items.push('Consider strategic initiatives to move from good to exceptional in your strongest areas.');
-  }
-
-  const recurringRevScore = categoryScores['Recurring Revenue']?.score || 0;
-  if (recurringRevScore < 60) {
-    items.push('Urgently develop recurring revenue streams to improve business predictability and value.');
-  }
-
-  const hubSpokeScore = categoryScores['Hub & Spoke']?.score || 0;
-  if (hubSpokeScore < 60) {
-    items.push('Reduce owner dependence by developing management systems and key employee capabilities.');
-  }
-
-  return items;
-}
 
 function getScoreColor(score: number): string {
   if (score >= 80) return '#10b981';
   if (score >= 45) return '#f59e0b';
   return '#ef4444';
-}
-
-function getScoreBarColor(score: number): string {
-  return getScoreColor(score);
 }
 
 

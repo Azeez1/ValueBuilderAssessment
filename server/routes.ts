@@ -189,16 +189,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.query.industry as string | undefined
       );
 
-      const html = await generateHTMLReport({
-        userName: (req.query.userName as string) || "User",
-        companyName: req.query.companyName as string | undefined,
-        industry: req.query.industry as string | undefined,
-        overallScore: overall,
-        categoryScores: assessment.categoryScores,
-        aiInsights: insights,
-      });
-
-      const pdf = await htmlToPdfBuffer(html);
+      const pdf = await generatePDFReport(
+        (req.query.userName as string) || "User",
+        (req.query.userEmail as string) || "",
+        req.query.companyName as string || "",
+        req.query.industry as string || "",
+        overall,
+        assessment.categoryScores,
+        assessment.answers as Record<string, AssessmentAnswer>
+      );
       res.setHeader("Content-Type", "application/pdf");
       res.send(pdf);
     } catch (error) {
