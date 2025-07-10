@@ -65,7 +65,7 @@ Based on this assessment, provide:
    - Timeline for implementing changes
    - Expected ROI on improvements
 
-Format the response in a professional, executive-ready style. Be specific and reference actual scores and answers. Avoid generic advice.
+Format the response in a professional, executive-ready style. Use simple bullet points with • instead of markdown. Avoid excessive headers with ### or ---. Be specific and reference actual scores and answers. Avoid generic advice.
 `;
 
     const completion = await openai.chat.completions.create({

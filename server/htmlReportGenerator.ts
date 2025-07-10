@@ -349,6 +349,25 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       font-weight: bold;
     }
 
+    .bullet-point {
+      margin: 8px 0;
+      padding-left: 20px;
+      line-height: 1.6;
+      color: #374151;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .numbered-point {
+      margin: 8px 0;
+      padding-left: 20px;
+      line-height: 1.6;
+      color: #374151;
+      font-weight: 500;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
     /* Print-specific styles */
     @media print {
       body {
@@ -525,24 +544,40 @@ function renderCategoryScores(scores: Record<string, CategoryScore>, categories:
 
 // Helper function to format AI insights
 function formatAIInsights(insights: string): string {
-  // Clean up markdown-style formatting and convert to HTML
-  return insights
-    .replace(/###\s*/g, '') // Remove ### headers
+  // Clean up all markdown artifacts and format properly
+  let cleaned = insights
+    .replace(/#{1,6}\s*/g, '') // Remove all # headers (##, ###, etc.)
+    .replace(/---+/g, '') // Remove horizontal rules
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
     .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
+    .replace(/•\s*•/g, '•') // Fix double bullets
+    .replace(/\s*•\s*/g, '• ') // Normalize bullet spacing
+    .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove excessive line breaks
+    .trim();
+
+  return cleaned
     .split('\n')
     .map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '';
       
-      // Remove markdown list markers
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        return `<li>${trimmed.substring(2)}</li>`;
-      } else if (trimmed.match(/^\d+\.\s/)) {
-        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
-      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
+      // Handle section headers (lines ending with colon)
+      if (trimmed.endsWith(':') && trimmed.length < 80) {
         return `<h4>${trimmed}</h4>`;
-      } else {
+      }
+      // Handle bullet points - don't add extra <li> tags, just style them
+      else if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const cleanText = trimmed.replace(/^[•\-\*]\s*/, '');
+        return `<div class="bullet-point">• ${cleanText}</div>`;
+      }
+      // Handle numbered lists
+      else if (trimmed.match(/^\d+\.\s/)) {
+        const cleanText = trimmed.replace(/^\d+\.\s*/, '');
+        const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
+        return `<div class="numbered-point">${num}. ${cleanText}</div>`;
+      }
+      // Regular paragraphs
+      else {
         return `<p>${trimmed}</p>`;
       }
     })
