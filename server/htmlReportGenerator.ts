@@ -147,10 +147,11 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       height: 12px;
       background: #e5e7eb;
       border-radius: 6px;
-      margin: 0 20px;
+      margin: 0 15px 0 20px;
       position: relative;
       overflow: hidden;
-      min-width: 120px;
+      min-width: 100px;
+      max-width: 180px;
     }
 
     .score-bar-fill {
@@ -160,11 +161,11 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     }
 
     .score-value {
-      flex: 0 0 40px;
+      flex: 0 0 50px;
       font-weight: bold;
       font-size: 16px;
       text-align: right;
-      min-width: 40px;
+      min-width: 50px;
     }
 
     .ai-insights {
