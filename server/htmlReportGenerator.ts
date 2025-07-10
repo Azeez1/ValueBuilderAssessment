@@ -127,45 +127,41 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     .category-score {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin: 12px 0;
-      padding: 16px 20px;
+      margin: 15px 0;
+      padding: 15px;
       background: #f9fafb;
       border-radius: 8px;
-      border: 1px solid #e5e7eb;
     }
 
     .category-name {
-      flex: 0 0 250px;
+      flex: 1;
       font-weight: 500;
       font-size: 14px;
       color: #374151;
+      min-width: 240px;
     }
 
     .score-bar {
-      flex: 1;
-      height: 12px;
+      width: 150px;
+      height: 8px;
       background: #e5e7eb;
-      border-radius: 6px;
-      margin: 0 15px 0 20px;
+      border-radius: 4px;
+      margin: 0 20px;
       position: relative;
       overflow: hidden;
-      min-width: 100px;
-      max-width: 180px;
     }
 
     .score-bar-fill {
       height: 100%;
-      border-radius: 6px;
+      border-radius: 4px;
       transition: width 0.3s ease;
     }
 
     .score-value {
-      flex: 0 0 50px;
       font-weight: bold;
       font-size: 16px;
       text-align: right;
-      min-width: 50px;
+      width: 50px;
     }
 
     .ai-insights {
@@ -412,18 +408,17 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       }
 
       .category-score {
-        padding: 12px 16px;
+        padding: 12px 15px;
         margin: 8px 0;
       }
 
       .category-name {
-        flex: 0 0 200px;
         font-size: 12px;
       }
 
       .score-bar {
+        width: 120px;
         margin: 0 15px;
-        height: 10px;
       }
 
       .score-value {
@@ -635,7 +630,7 @@ function renderSingleCategory(category: string, score: CategoryScore): string {
 
         ${hasAI ? `
           <div class="ai-analysis-section">
-            <h4>AI-Powered Analysis:</h4>
+            <h4>Analysis:</h4>
             <div class="ai-content">
               ${formatAnalysisContent(score.analysis!)}
             </div>
