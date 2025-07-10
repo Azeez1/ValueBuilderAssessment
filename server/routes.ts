@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAssessmentSchema, insertResultSchema, updateAssessmentSchema, type AssessmentAnswer, type CategoryScore } from "@shared/schema";
-import { convertHTMLToPDF } from "./htmlToPdfBridge";
+import { generatePDFReport } from "./pdfGenerator";
 import { generateHTMLReport } from "./htmlReportGenerator";
 import { generateAIInsights, generateCategoryInsight, generateFallbackAnalysis } from "./openaiService";
 import { calculateCategoryScores, calculateOverallScore } from "../client/src/lib/scoring";
@@ -256,17 +256,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.query.industry as string | undefined
       );
 
-      const html = await generateHTMLReport({
-        userName: (req.query.userName as string) || "User",
-        userEmail: (req.query.userEmail as string) || "",
-        companyName: req.query.companyName as string | undefined,
-        industry: req.query.industry as string | undefined,
-        overallScore: overall,
-        categoryScores: assessment.categoryScores,
-        aiInsights: insights,
-      });
-
-      const pdfBuffer = await convertHTMLToPDF(html);
+      const pdfBuffer = await generatePDFReport(
+        (req.query.userName as string) || "User",
+        (req.query.userEmail as string) || "",
+        (req.query.companyName as string) || "Your Company",
+        (req.query.industry as string) || "General",
+        overall,
+        assessment.categoryScores,
+        assessment.answers || {}
+      );
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
@@ -316,8 +314,16 @@ async function sendResultEmail(resultData: any) {
     aiInsights: insights,
   });
 
-  console.log('Converting HTML to PDF for email...');
-  const pdfBuffer = await convertHTMLToPDF(html);
+  console.log('Generating PDF for email...');
+  const pdfBuffer = await generatePDFReport(
+    userName,
+    userEmail || "",
+    companyName || "Your Company", 
+    industry || "General",
+    overallScore,
+    categoryBreakdown,
+    answers
+  );
   console.log('PDF generated successfully');
 
   const emailContent = `

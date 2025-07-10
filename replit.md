@@ -128,6 +128,8 @@ If "address already in use" error occurs:
 ## Changelog
 
 Changelog:
+- July 10, 2025. Fixed PDF generation issues - replaced HTML-to-PDF conversion with native PDF generator to eliminate duplicated content and formatting problems
+- July 10, 2025. Fixed speed test assessment saving logic - now properly saves assessment data to database for report generation
 - July 08, 2025. Fixed scoring logic for incomplete sections - now calculates based on answered questions only instead of defaulting to low scores
 - July 08, 2025. Added safe start/stop scripts to prevent port conflicts
 - July 07, 2025. Initial setup
