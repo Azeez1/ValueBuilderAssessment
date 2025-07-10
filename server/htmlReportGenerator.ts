@@ -380,7 +380,7 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     }
 
     /* Ensure all content sections are visible */
-    section, div {
+    .ai-insights, .priority-areas, .category-detail {
       height: auto !important;
       overflow: visible !important;
     }
@@ -566,78 +566,87 @@ function renderCategoryScores(scores: Record<string, CategoryScore>, categories:
 
 // Helper function to format AI insights
 function formatAIInsights(insights: string): string {
-  // Clean up all markdown artifacts and format properly
-  let cleaned = insights
-    .replace(/#{1,6}\s*/g, '') // Remove all # headers (##, ###, etc.)
+  // First, clean up the insights by splitting on common section headers
+  let sections = insights
+    .replace(/#{1,6}\s*/g, '') // Remove all # headers
     .replace(/---+/g, '') // Remove horizontal rules
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
     .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
-    .replace(/•\s*•/g, '•') // Fix double bullets
-    .replace(/\s*•\s*/g, '• ') // Normalize bullet spacing
-    .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove excessive line breaks
     .trim();
 
-  // Split into sections and process each line
-  const lines = cleaned.split('\n');
-  let formatted: string[] = [];
-  let inList = false;
+  // Split the content into major sections
+  const sectionPatterns = [
+    'Strategic Insights',
+    'Priority Action Items',
+    'Value Enhancement Potential',
+    'Executive Summary',
+    'Key Findings',
+    'Recommendations'
+  ];
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+  let formattedHtml = '<div class="ai-content">';
+  
+  // Process each section
+  sectionPatterns.forEach(sectionName => {
+    const regex = new RegExp(`(${sectionName}[:\\s]*)([\\s\\S]*?)(?=${sectionPatterns.join('|')}|$)`, 'i');
+    const match = sections.match(regex);
     
-    if (!trimmed) {
-      if (inList) {
-        formatted.push('</div>'); // Close list container
-        inList = false;
+    if (match) {
+      const sectionTitle = match[1].replace(/[:\s]*$/, '');
+      const sectionContent = match[2].trim();
+      
+      if (sectionContent) {
+        formattedHtml += `<h4>${sectionTitle}:</h4>\n<div class="ai-list">`;
+        
+        // Process bullet points within the section
+        const bullets = sectionContent.split(/(?=•|-|\d+\.)/);
+        
+        bullets.forEach(bullet => {
+          const trimmed = bullet.trim();
+          if (!trimmed) return;
+          
+          // Clean bullet and format
+          if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+            const cleanText = trimmed.replace(/^[•\-]\s*/, '').trim();
+            if (cleanText) {
+              formattedHtml += `\n<div class="bullet-point">• ${cleanText}</div>`;
+            }
+          } else if (trimmed.match(/^\d+\./)) {
+            const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
+            const cleanText = trimmed.replace(/^\d+\.\s*/, '').trim();
+            if (cleanText) {
+              formattedHtml += `\n<div class="numbered-point"><strong>${num}.</strong> ${cleanText}</div>`;
+            }
+          } else if (trimmed.length > 0) {
+            // Non-bullet content
+            formattedHtml += `\n<p>${trimmed}</p>`;
+          }
+        });
+        
+        formattedHtml += '\n</div>';
       }
-      formatted.push('<br>');
-      continue;
     }
-    
-    // Handle section headers (lines ending with colon)
-    if (trimmed.endsWith(':') && trimmed.length < 80 && !trimmed.startsWith('•')) {
-      if (inList) {
-        formatted.push('</div>');
-        inList = false;
+  });
+  
+  // Handle any remaining content not in sections
+  const remainingContent = sections.replace(new RegExp(`(${sectionPatterns.join('|')})[:\\s][\\s\\S]*`, 'gi'), '').trim();
+  if (remainingContent) {
+    const lines = remainingContent.split('\n');
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed) {
+        if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+          const cleanText = trimmed.replace(/^[•\-]\s*/, '').trim();
+          formattedHtml += `\n<div class="bullet-point">• ${cleanText}</div>`;
+        } else {
+          formattedHtml += `\n<p>${trimmed}</p>`;
+        }
       }
-      formatted.push(`<h4>${trimmed}</h4>`);
-    }
-    // Handle bullet points - avoid double bullets
-    else if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      if (!inList) {
-        formatted.push('<div class="ai-list">');
-        inList = true;
-      }
-      const cleanText = trimmed.replace(/^[•\-\*]\s*/, '').replace(/^•\s*/, ''); // Remove any leading bullets
-      formatted.push(`<div class="bullet-point">• ${cleanText}</div>`);
-    }
-    // Handle numbered lists
-    else if (trimmed.match(/^\d+\.\s/)) {
-      if (!inList) {
-        formatted.push('<div class="ai-list">');
-        inList = true;
-      }
-      const cleanText = trimmed.replace(/^\d+\.\s*/, '');
-      const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
-      formatted.push(`<div class="numbered-point"><strong>${num}.</strong> ${cleanText}</div>`);
-    }
-    // Regular paragraphs
-    else {
-      if (inList) {
-        formatted.push('</div>');
-        inList = false;
-      }
-      formatted.push(`<p>${trimmed}</p>`);
-    }
+    });
   }
-
-  // Close any open list
-  if (inList) {
-    formatted.push('</div>');
-  }
-
-  return `<div class="ai-content">${formatted.join('\n')}</div>`;
+  
+  formattedHtml += '\n</div>';
+  return formattedHtml;
 }
 
 // Helper function to render priority areas
