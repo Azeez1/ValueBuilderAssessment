@@ -124,12 +124,12 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId, speedT
       completed: 0,
     };
 
-    if (Object.keys(answers).length === 1) {
-      // First save - create new assessment
-      saveAssessmentMutation.mutate(assessmentData);
-    } else {
+    if (existingAssessment) {
       // Update existing assessment
       updateAssessmentMutation.mutate(assessmentData);
+    } else {
+      // Create new assessment
+      saveAssessmentMutation.mutate(assessmentData);
     }
   };
 
@@ -163,6 +163,17 @@ export default function AssessmentScreen({ onComplete, onExit, sessionId, speedT
       };
     });
     setAnswers(randomAnswers);
+    
+    // Save the assessment with all random answers to the database
+    const assessmentData = {
+      sessionId,
+      answers: randomAnswers,
+      currentQuestion: questions.length - 1,
+      completed: 0,
+    };
+    
+    // For speed test, always create a new assessment since it's a fresh session
+    saveAssessmentMutation.mutate(assessmentData);
     
     // Show notification about random fill
     toast({
