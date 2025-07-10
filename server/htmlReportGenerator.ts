@@ -151,6 +151,7 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-radius: 3px;
       margin: 0 15px;
       position: relative;
+      overflow: hidden;
     }
 
     .score-bar-fill {
@@ -172,8 +173,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-left: 4px solid #1e40af;
       padding: 20px;
       margin: 40px 0;
-      height: auto;
-      min-height: 100px;
     }
 
     .priority-areas {
@@ -181,7 +180,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border-left: 4px solid #ef4444;
       padding: 20px;
       margin: 40px 0;
-      height: auto;
     }
 
     .priority-item {
@@ -199,8 +197,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       page-break-inside: avoid;
-      height: auto;
-      min-height: 200px;
     }
 
     .category-header {
@@ -303,8 +299,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       padding: 20px;
       margin-top: 30px;
       border-radius: 0 8px 8px 0;
-      height: auto;
-      min-height: 100px;
     }
 
     .ai-content {
@@ -353,41 +347,6 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       left: 0;
       color: #1e40af;
       font-weight: bold;
-    }
-
-    .bullet-point {
-      margin: 8px 0;
-      padding-left: 20px;
-      line-height: 1.6;
-      color: #374151;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-
-    .numbered-point {
-      margin: 8px 0;
-      padding-left: 20px;
-      line-height: 1.6;
-      color: #374151;
-      font-weight: 500;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-
-    .ai-list {
-      margin: 10px 0;
-      padding: 0;
-    }
-
-    /* Ensure all content sections are visible */
-    .ai-insights, .priority-areas, .category-detail {
-      height: auto !important;
-      overflow: visible !important;
-    }
-
-    .container {
-      height: auto !important;
-      overflow: visible !important;
     }
 
     /* Print-specific styles */
@@ -566,87 +525,28 @@ function renderCategoryScores(scores: Record<string, CategoryScore>, categories:
 
 // Helper function to format AI insights
 function formatAIInsights(insights: string): string {
-  // First, clean up the insights by splitting on common section headers
-  let sections = insights
-    .replace(/#{1,6}\s*/g, '') // Remove all # headers
-    .replace(/---+/g, '') // Remove horizontal rules
+  // Clean up markdown-style formatting and convert to HTML
+  return insights
+    .replace(/###\s*/g, '') // Remove ### headers
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
     .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
-    .trim();
-
-  // Split the content into major sections
-  const sectionPatterns = [
-    'Strategic Insights',
-    'Priority Action Items',
-    'Value Enhancement Potential',
-    'Executive Summary',
-    'Key Findings',
-    'Recommendations'
-  ];
-
-  let formattedHtml = '<div class="ai-content">';
-  
-  // Process each section
-  sectionPatterns.forEach(sectionName => {
-    const regex = new RegExp(`(${sectionName}[:\\s]*)([\\s\\S]*?)(?=${sectionPatterns.join('|')}|$)`, 'i');
-    const match = sections.match(regex);
-    
-    if (match) {
-      const sectionTitle = match[1].replace(/[:\s]*$/, '');
-      const sectionContent = match[2].trim();
-      
-      if (sectionContent) {
-        formattedHtml += `<h4>${sectionTitle}:</h4>\n<div class="ai-list">`;
-        
-        // Process bullet points within the section
-        const bullets = sectionContent.split(/(?=•|-|\d+\.)/);
-        
-        bullets.forEach(bullet => {
-          const trimmed = bullet.trim();
-          if (!trimmed) return;
-          
-          // Clean bullet and format
-          if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
-            const cleanText = trimmed.replace(/^[•\-]\s*/, '').trim();
-            if (cleanText) {
-              formattedHtml += `\n<div class="bullet-point">• ${cleanText}</div>`;
-            }
-          } else if (trimmed.match(/^\d+\./)) {
-            const num = trimmed.match(/^(\d+)\./)?.[1] || '1';
-            const cleanText = trimmed.replace(/^\d+\.\s*/, '').trim();
-            if (cleanText) {
-              formattedHtml += `\n<div class="numbered-point"><strong>${num}.</strong> ${cleanText}</div>`;
-            }
-          } else if (trimmed.length > 0) {
-            // Non-bullet content
-            formattedHtml += `\n<p>${trimmed}</p>`;
-          }
-        });
-        
-        formattedHtml += '\n</div>';
-      }
-    }
-  });
-  
-  // Handle any remaining content not in sections
-  const remainingContent = sections.replace(new RegExp(`(${sectionPatterns.join('|')})[:\\s][\\s\\S]*`, 'gi'), '').trim();
-  if (remainingContent) {
-    const lines = remainingContent.split('\n');
-    lines.forEach(line => {
+    .split('\n')
+    .map(line => {
       const trimmed = line.trim();
-      if (trimmed) {
-        if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
-          const cleanText = trimmed.replace(/^[•\-]\s*/, '').trim();
-          formattedHtml += `\n<div class="bullet-point">• ${cleanText}</div>`;
-        } else {
-          formattedHtml += `\n<p>${trimmed}</p>`;
-        }
+      if (!trimmed) return '';
+      
+      // Remove markdown list markers
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        return `<li>${trimmed.substring(2)}</li>`;
+      } else if (trimmed.match(/^\d+\.\s/)) {
+        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
+      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
+        return `<h4>${trimmed}</h4>`;
+      } else {
+        return `<p>${trimmed}</p>`;
       }
-    });
-  }
-  
-  formattedHtml += '\n</div>';
-  return formattedHtml;
+    })
+    .join('\n');
 }
 
 // Helper function to render priority areas
