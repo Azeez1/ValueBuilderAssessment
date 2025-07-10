@@ -127,37 +127,44 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
     .category-score {
       display: flex;
       align-items: center;
-      margin: 15px 0;
-      padding: 15px;
+      justify-content: space-between;
+      margin: 12px 0;
+      padding: 16px 20px;
       background: #f9fafb;
       border-radius: 8px;
+      border: 1px solid #e5e7eb;
     }
 
     .category-name {
-      flex: 1;
+      flex: 0 0 250px;
       font-weight: 500;
+      font-size: 14px;
+      color: #374151;
     }
 
     .score-bar {
-      width: 150px;
-      height: 8px;
+      flex: 1;
+      height: 12px;
       background: #e5e7eb;
-      border-radius: 4px;
+      border-radius: 6px;
       margin: 0 20px;
       position: relative;
       overflow: hidden;
+      min-width: 120px;
     }
 
     .score-bar-fill {
       height: 100%;
-      border-radius: 4px;
+      border-radius: 6px;
       transition: width 0.3s ease;
     }
 
     .score-value {
+      flex: 0 0 40px;
       font-weight: bold;
-      width: 50px;
+      font-size: 16px;
       text-align: right;
+      min-width: 40px;
     }
 
     .ai-insights {
@@ -401,6 +408,25 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
 
       .large-score .score-total {
         font-size: 24px;
+      }
+
+      .category-score {
+        padding: 12px 16px;
+        margin: 8px 0;
+      }
+
+      .category-name {
+        flex: 0 0 200px;
+        font-size: 12px;
+      }
+
+      .score-bar {
+        margin: 0 15px;
+        height: 10px;
+      }
+
+      .score-value {
+        font-size: 14px;
       }
     }
   </style>
