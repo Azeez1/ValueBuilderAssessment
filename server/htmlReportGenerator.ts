@@ -349,6 +349,50 @@ export async function generateHTMLReport(options: HtmlReportOptions): Promise<st
       font-weight: bold;
     }
 
+    /* Ensure consistent text rendering */
+    .ai-content, .description, p {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      hyphens: auto;
+      text-align: justify;
+      line-height: 1.7;
+    }
+
+    /* Ensure lists don't get cut off */
+    ul {
+      page-break-inside: avoid;
+      margin: 12px 0;
+    }
+
+    li {
+      page-break-inside: avoid;
+      margin: 8px 0;
+    }
+
+    /* Prevent headers from being orphaned */
+    h4, h5 {
+      page-break-after: avoid;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    /* Ensure sections stay together */
+    .category-detail, .ai-insights, .priority-areas {
+      page-break-inside: avoid;
+      overflow: hidden;
+    }
+
+    /* Fix bullet point alignment */
+    .insights-list li {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .insights-list li:before {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
     /* Print-specific styles */
     @media print {
       body {
@@ -525,28 +569,64 @@ function renderCategoryScores(scores: Record<string, CategoryScore>, categories:
 
 // Helper function to format AI insights
 function formatAIInsights(insights: string): string {
-  // Clean up markdown-style formatting and convert to HTML
-  return insights
+  // First, clean up any markdown artifacts
+  let cleaned = insights
     .replace(/###\s*/g, '') // Remove ### headers
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
-    .split('\n')
-    .map(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return '';
-      
-      // Remove markdown list markers
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        return `<li>${trimmed.substring(2)}</li>`;
-      } else if (trimmed.match(/^\d+\.\s/)) {
-        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
-      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
-        return `<h4>${trimmed}</h4>`;
-      } else {
-        return `<p>${trimmed}</p>`;
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Convert bold
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>'); // Convert italic
+
+  // Split into lines and process each one
+  const lines = cleaned.split('\n').map(line => line.trim());
+  let html = '';
+  let inList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) {
+      // Empty line - close list if open and add spacing
+      if (inList) {
+        html += '</ul>';
+        inList = false;
       }
-    })
-    .join('\n');
+      continue;
+    }
+
+    // Check if this is a header (ends with colon and is relatively short)
+    if (line.endsWith(':') && line.length < 80 && !line.startsWith('-')) {
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+      html += `<h4 style="margin-top: 20px; margin-bottom: 12px; color: #1e40af;">${line}</h4>`;
+    }
+    // Check if this is a list item
+    else if (line.startsWith('- ') || line.match(/^\d+\.\s/)) {
+      if (!inList) {
+        html += '<ul style="list-style: none; padding-left: 0; margin: 12px 0;">';
+        inList = true;
+      }
+      const content = line.replace(/^[-\d]+\.\s*/, '');
+      html += `<li style="padding-left: 24px; margin: 8px 0; position: relative;">
+        <span style="position: absolute; left: 8px; color: #1e40af; font-weight: bold;">•</span>
+        ${content}
+      </li>`;
+    }
+    // Regular paragraph
+    else {
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+      html += `<p style="margin: 12px 0; line-height: 1.7;">${line}</p>`;
+    }
+  }
+
+  // Close any open list
+  if (inList) {
+    html += '</ul>';
+  }
+
+  return html;
 }
 
 // Helper function to render priority areas
@@ -655,27 +735,36 @@ function formatAnalysisContent(analysis: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold text
     .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic text
     .replace(/\.-\s*/g, '') // Remove .- marks
-    .replace(/^-+\s*/gm, '') // Remove leading dashes
+    .replace(/^-+\s*/gm, ''); // Remove leading dashes
 
-  return cleaned
-    .split('\n')
-    .filter(p => p.trim())
-    .map(p => {
-      const trimmed = p.trim();
-      if (!trimmed) return '';
-      
-      // Handle list items
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        return `<li>${trimmed.substring(2)}</li>`;
-      } else if (trimmed.match(/^\d+\.\s/)) {
-        return `<li>${trimmed.replace(/^\d+\.\s*/, '')}</li>`;
-      } else if (trimmed.endsWith(':') && trimmed.length < 80) {
-        return `<h5>${trimmed}</h5>`;
-      } else {
-        return `<p>${trimmed}</p>`;
-      }
-    })
-    .join('\n');
+  const lines = cleaned.split('\n').filter(line => line.trim());
+  let html = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Headers (short lines ending with colon)
+    if (trimmed.endsWith(':') && trimmed.length < 60) {
+      html += `<h5 style="margin: 16px 0 8px 0; color: #1e40af; font-weight: 600;">${trimmed}</h5>`;
+    }
+    // List items
+    else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.match(/^\d+\.\s/)) {
+      const content = trimmed.replace(/^[-*\d]+\.\s*/, '');
+      html += `<ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="padding-left: 20px; position: relative; margin: 6px 0;">
+          <span style="position: absolute; left: 0; color: #1e40af; font-weight: bold;">•</span>
+          ${content}
+        </li>
+      </ul>`;
+    }
+    // Regular paragraphs
+    else {
+      html += `<p style="margin: 10px 0; line-height: 1.6; word-wrap: break-word;">${trimmed}</p>`;
+    }
+  }
+
+  return html;
 }
 
 function getScoreLabel(score: number): string {
