@@ -245,67 +245,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 async function sendResultEmail(resultData: any) {
-  const { userName, userEmail, companyName, industry, overallScore, categoryBreakdown, sessionId } = resultData;
+  const {
+    userName,
+    userEmail,
+    companyName,
+    industry,
+    overallScore,
+    sessionId,
+  } = resultData;
+  let enhancedCategoryScores = resultData.categoryBreakdown as Record<string, CategoryScore>;
+  let executiveInsights = "";
+  let finalScore = overallScore;
 
   console.log('Attempting to send email with config:', {
     host: smtpHost,
     port: smtpPort,
     user: smtpUser,
     secure: smtpPort === 465,
-    passExists: !!smtpPass
+    passExists: !!smtpPass,
   });
 
-  // Get full assessment with answers
-  const assessment = await storage.getAssessmentBySessionId(sessionId);
-  const answers = (assessment?.answers || {}) as Record<string, AssessmentAnswer>;
+  // Try cached insights first
+  const cached = await storage.getCachedInsights(sessionId);
+  if (cached) {
+    enhancedCategoryScores = cached.categoryScores;
+    executiveInsights = cached.insights;
+    finalScore = cached.overallScore;
+  } else {
+    const assessment = await storage.getAssessmentBySessionId(sessionId);
+    if (!assessment || !assessment.answers) {
+      console.error('No assessment found for email generation');
+      return 'failed';
+    }
 
-  // Generate AI insights and HTML then convert to PDF
-  const insights = await generateAIInsights(
-    answers,
-    categoryBreakdown,
-    overallScore,
-    companyName,
-    industry
-  );
+    const answers = assessment.answers as Record<string, AssessmentAnswer>;
+    const categoryScores = assessment.categoryScores || calculateCategoryScores(answers);
+    finalScore = assessment.totalScore || calculateOverallScore(categoryScores);
 
+    console.log('Generating executive AI insights for email...');
+    executiveInsights = await generateAIInsights(
+      answers,
+      categoryScores,
+      finalScore,
+      companyName,
+      industry,
+    );
+
+    console.log('Generating category-specific insights for email...');
+    enhancedCategoryScores = { ...categoryScores };
+
+    for (const [category, score] of Object.entries(categoryScores) as [string, CategoryScore][]) {
+      if (score.score < 80) {
+        console.log(`Generating AI analysis for ${category} (score: ${score.score})...`);
+        try {
+          const categoryInsight = await generateCategoryInsight(
+            category,
+            score.score,
+            answers,
+          );
+          enhancedCategoryScores[category] = {
+            ...score,
+            analysis: categoryInsight,
+          };
+        } catch (err) {
+          console.error(`Failed to generate insight for ${category}:`, err);
+          enhancedCategoryScores[category] = {
+            ...score,
+            analysis: generateFallbackAnalysis(category, score.score),
+          };
+        }
+      }
+    }
+
+    await storage.cacheInsights(sessionId, {
+      sessionId,
+      insights: executiveInsights,
+      categoryScores: enhancedCategoryScores,
+      overallScore: finalScore,
+    });
+  }
+
+  // Generate complete HTML report
+  console.log('Generating complete HTML report for email attachment...');
   const html = await generateHTMLReport({
     userName,
     userEmail,
     companyName,
     industry,
-    overallScore,
-    categoryScores: categoryBreakdown,
-    aiInsights: insights,
+    overallScore: finalScore,
+    categoryScores: enhancedCategoryScores,
+    aiInsights: executiveInsights,
   });
 
   console.log('Preparing HTML report for email...');
 
-  // Create file attachments
   const htmlAttachment = {
-    filename: `ValueBuilder_Report_${sessionId}_${Date.now()}.html`,
+    filename: `ValueBuilder_Report_${
+      companyName ? companyName.replace(/\s+/g, '_') : userName.replace(/\s+/g, '_')
+    }_${new Date().toISOString().split('T')[0]}.html`,
     content: html,
-    contentType: 'text/html'
+    contentType: 'text/html',
   };
 
+  const strongAreas = Object.values(enhancedCategoryScores).filter((s) => s.score >= 80).length;
+  const priorityAreas = Object.values(enhancedCategoryScores).filter((s) => s.score < 60).length;
+  const grade = getGrade(finalScore);
+
   const emailContent = `
-      <h2>Value Builder Assessment Completed</h2>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1e40af;">Value Builder Assessment Completed</h2>
       <p>Dear ${userName},</p>
       <p>Thank you for completing the Value Builder Assessment. Your comprehensive report is attached to this email.</p>
-      <p><strong>Your Overall Score: ${overallScore}/100</strong></p>
-      <p>Your report includes:</p>
-      <ul>
-        <li>Detailed breakdown of all 14 assessment categories</li>
-        <li>Priority areas for improvement</li>
-        <li>Strategic recommendations</li>
-        <li>Performance analysis</li>
+      
+      <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #111827; margin-top: 0;">Your Assessment Summary:</h3>
+        <p style="font-size: 24px; font-weight: bold; color: ${getScoreColor(finalScore)}; margin: 10px 0;">
+          Overall Score: ${finalScore}/100 (Grade: ${grade})
+        </p>
+        <p style="margin: 5px 0;">• <strong>${strongAreas}</strong> Strong Areas (80+ score)</p>
+        <p style="margin: 5px 0;">• <strong>${priorityAreas}</strong> Priority Areas for Improvement</p>
+        <p style="margin: 5px 0;">• <strong>14</strong> Business Categories Analyzed</p>
+      </div>
+
+      <h3 style="color: #1e40af;">Your Complete Report Includes:</h3>
+      <ul style="line-height: 1.8;">
+        <li><strong>Executive Analysis & Strategic Insights</strong> - AI-powered analysis of your business</li>
+        <li><strong>Performance Summary</strong> - Detailed scores for all 14 assessment categories</li>
+        <li><strong>Priority Areas</strong> - Specific areas requiring immediate attention</li>
+        <li><strong>Category Deep-Dives</strong> - Comprehensive analysis of each business area</li>
+        <li><strong>Actionable Recommendations</strong> - Specific steps to improve business value</li>
       </ul>
-      <p><strong>Attached Files:</strong></p>
-      <ul>
-        <li><strong>HTML Report</strong> - View in your browser or save for future reference</li>
-        <li>You can also print the HTML report to PDF using your browser's print function</li>
-      </ul>
-      <p>Best regards,<br>Value Builder Assessment Team</p>
-    `;
+
+      <div style="background: #f0f9ff; border-left: 4px solid #1e40af; padding: 15px; margin: 20px 0;">
+        <h4 style="color: #1e40af; margin-top: 0;">How to Use Your Report:</h4>
+        <ol style="margin: 0; padding-left: 20px;">
+          <li>Open the attached HTML file in your web browser</li>
+          <li>Review the Executive Analysis for strategic insights</li>
+          <li>Focus on red-scored categories (below 60) first</li>
+          <li>Use your browser's print function to save as PDF if needed</li>
+        </ol>
+      </div>
+
+      <p><strong>Next Steps:</strong></p>
+      <p>We recommend reviewing your report with your leadership team and creating an action plan based on the priority areas identified. The report provides specific, actionable recommendations for each category.</p>
+
+      <p style="margin-top: 30px;">Best regards,<br>
+      <strong>Value Builder Assessment Team</strong><br>
+      <a href="mailto:${smtpUser}" style="color: #1e40af;">${smtpUser}</a></p>
+    </div>
+  `;
 
   // Add SMTP verification first
   try {
@@ -318,29 +406,28 @@ async function sendResultEmail(resultData: any) {
 
   try {
     // Send to user
-    console.log('Sending email to user:', userEmail);
+    console.log('Sending complete report to user:', userEmail);
     const userMailInfo = await transporter.sendMail({
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: userEmail,
-      subject: "Your Value Builder Assessment Results",
+      subject: `Your Value Builder Assessment Results - Score: ${finalScore}/100`,
       html: emailContent,
-      attachments: [htmlAttachment]
+      attachments: [htmlAttachment],
     });
     console.log('Email sent to user successfully:', userMailInfo.messageId);
 
     // Send to admin
-    console.log('Sending email to admin:', smtpUser);
+    console.log('Sending complete report to admin:', smtpUser);
     const adminMailInfo = await transporter.sendMail({
       from: `"Value Builder Assessment" <${smtpUser}>`,
       to: smtpUser,
-      subject: `New Value Builder Assessment: ${userName} - Score: ${overallScore}/100`,
+      subject: `New Assessment: ${userName} (${companyName || 'No Company'}) - Score: ${finalScore}/100`,
       html: emailContent,
-      attachments: [htmlAttachment]
+      attachments: [htmlAttachment],
     });
     console.log('Email sent to admin successfully:', adminMailInfo.messageId);
 
     return 'success';
-
   } catch (error: any) {
     console.error('Email sending failed:', error.message);
     if (error.code) console.error('Error code:', error.code);
@@ -348,4 +435,25 @@ async function sendResultEmail(resultData: any) {
     if (error.response) console.error('SMTP Response:', error.response);
     return 'failed';
   }
+}
+
+function getGrade(score: number): string {
+  if (score >= 90) return 'A+';
+  if (score >= 85) return 'A';
+  if (score >= 80) return 'A-';
+  if (score >= 75) return 'B+';
+  if (score >= 70) return 'B';
+  if (score >= 65) return 'B-';
+  if (score >= 60) return 'C+';
+  if (score >= 55) return 'C';
+  if (score >= 50) return 'C-';
+  if (score >= 45) return 'D+';
+  if (score >= 40) return 'D';
+  return 'F';
+}
+
+function getScoreColor(score: number): string {
+  if (score >= 80) return '#10b981';
+  if (score >= 60) return '#f59e0b';
+  return '#ef4444';
 }
