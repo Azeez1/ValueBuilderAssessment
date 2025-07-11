@@ -43,30 +43,44 @@ ${Object.entries(categoryScores)
 DETAILED ANSWER ANALYSIS:
 ${answerContext}
 
-Based on this assessment, provide:
+FORMATTING REQUIREMENTS:
+- Use clear section headers without markdown (no ###)
+- For bullet points, use a simple dash (-) at the start of the line
+- Keep paragraphs concise and well-spaced
+- Ensure each section is complete - do not cut off mid-sentence
+- Use bold text sparingly by wrapping important terms in **double asterisks**
+- Maintain consistent formatting throughout
 
-1. **Executive Summary** (2-3 paragraphs)
-   - Overall business health and valuation readiness
-   - Key strengths that enhance value
-   - Critical areas requiring immediate attention
+Generate the following sections:
 
-2. **Strategic Insights** (3-4 key insights)
-   - Patterns and relationships between different scores
-   - Hidden opportunities based on the specific answers
-   - Risk factors that could impact valuation
+1. Executive Summary
+Write 2-3 complete paragraphs that:
+- Summarize overall business health and valuation readiness
+- Highlight 2-3 key strengths that enhance value
+- Identify 2-3 critical areas requiring immediate attention
 
-3. **Priority Action Items** (Top 5 recommendations)
-   - Specific, actionable steps based on lowest scores
-   - Quick wins that could improve valuation
-   - Long-term strategic initiatives
+2. Strategic Insights
+Provide exactly 4 strategic insights as bullet points:
+- Each insight should be 1-2 complete sentences
+- Focus on patterns and relationships between scores
+- Include specific score references where relevant
+- Identify hidden opportunities based on the assessment
 
-4. **Value Enhancement Potential**
-   - Estimated value improvement if key issues addressed
-   - Timeline for implementing changes
-   - Expected ROI on improvements
+3. Priority Action Items
+List exactly 5 specific, actionable recommendations:
+- Order by priority (most critical first)
+- Each item should be a complete, actionable statement
+- Include quick wins and long-term initiatives
+- Reference specific low-scoring categories
 
-Format the response in a professional, executive-ready style. Be specific and reference actual scores and answers. Avoid generic advice.
-`;
+4. Value Enhancement Potential
+Write 2 complete paragraphs covering:
+- Estimated value improvement potential (use percentages)
+- Realistic timeline for implementing changes (3-6 months, 6-12 months, etc.)
+- Expected ROI on suggested improvements
+- Key success metrics to track
+
+Remember: Complete all sections fully. Do not use placeholder text or incomplete sentences.`;
 
     const completion = await openai.chat.completions.create({
       model: AI_MODEL,
@@ -136,7 +150,21 @@ export async function generateCategoryInsight(
       })
       .join('\n');
 
-    const prompt = `Generate a brief, actionable analysis for the ${category} category with a score of ${score}/100.\n\nDetailed Answers:\n${categoryAnswers}`;
+    const prompt = `Analyze the ${category} category with a score of ${score}/100.
+
+Detailed Answers:
+${categoryAnswers}
+
+FORMATTING REQUIREMENTS:
+- Write 2-3 complete paragraphs (no headers)
+- Start with the current state based on the score
+- Include specific risks or opportunities
+- End with 2-3 actionable recommendations
+- Use complete sentences - no bullet points
+- Keep total response under 250 words
+- Do not use markdown formatting or special characters
+
+Focus on being specific to this business based on their answers, not generic advice.`;
 
     const completion = await openai.chat.completions.create({
       model: AI_MODEL,
